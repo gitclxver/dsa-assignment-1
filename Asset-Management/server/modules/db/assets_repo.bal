@@ -163,7 +163,6 @@ public isolated class AssetRepository {
     }
 
     public isolated function updateWorkOrder(string assetTag, string workOrderId, models:WorkOrder workOrder) returns models:Asset|error {
-    // remove old work order
     mongodb:UpdateResult removeResult = check self.assets->updateOne(
         {assetTag: assetTag},
         {"$pull": {workOrders: {workOrderId: workOrderId}}}
@@ -171,8 +170,6 @@ public isolated class AssetRepository {
     if removeResult.matchedCount == 0 {
         return error(config:WORKORDER_NOT_FOUND);
     }
-
-    // add updated work order
     mongodb:UpdateResult addResult = check self.assets->updateOne(
         {assetTag: assetTag},
         {"$push": {workOrders: <json>workOrder}}
@@ -197,7 +194,7 @@ public isolated class AssetRepository {
         return self.getAsset(assetTag);
     }
 
-    // ---------------- Task Operations ----------------
+    // Task Operations
     public isolated function addTask(string assetTag, string workOrderId, models:Task task) returns models:Asset|error {
         mongodb:UpdateResult result = check self.assets->updateOne(
             {assetTag: assetTag, "workOrders.workOrderId": workOrderId},
