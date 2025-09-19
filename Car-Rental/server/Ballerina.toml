@@ -1,6 +1,6 @@
 [package]
-org = "clxver"
-name = "server"
+org = "server"
+name = "car_rental"
 version = "0.1.0"
 distribution = "2201.12.9"
 
