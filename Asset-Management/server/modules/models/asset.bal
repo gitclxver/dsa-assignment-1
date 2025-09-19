@@ -1,5 +1,4 @@
 import ballerina/time;
-// Asset model
 public type Asset record {|
     string assetTag;
     string name;

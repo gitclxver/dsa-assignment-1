@@ -34,9 +34,33 @@ public function main() returns error? {
     if (result is error) {
         io:println(" Task addition failed: " + result.message());
     }
+
+    // Update operation 
+    result = updateAsset("LAP-001");
+    if (result is error) {
+        io:println("Asset update failed: " + result.message());
+    }
+    
+    // Remove operations 
+    result = removeComponent("LAP-001", "COMP-001");
+    if (result is error) {
+        io:println("Component removal failed: " + result.message());
+    }
+    
+    result = removeSchedule("LAP-001", "SCHED-001");
+    if (result is error) {
+        io:println("Schedule removal failed: " + result.message());
+    }
+    
+    // Delete operation 
+    result = deleteAsset("SRV-001");
+    if (result is error) {
+        io:println("Asset deletion failed: " + result.message());
+    }
     
     io:println("Demo completed!");
 }
+  
 
 function createTestAssets() returns error? {
     io:println("1. Creating test assets...");
@@ -66,9 +90,9 @@ function createTestAssets() returns error? {
         http:Response response = check apiClient->post("/api/assets", assetJson);
       
         if (response.statusCode >= 200 && response.statusCode < 300) {
-            io:println("✓ Created: " + asset.assetTag);
+            io:println(" Created: " + asset.assetTag);
         } else {
-            io:println("✗ Failed to create asset " + asset.assetTag + ": Status " + response.statusCode.toString());
+            io:println(" Failed to create asset " + asset.assetTag + ": Status " + response.statusCode.toString());
         }
     }
     io:println();
@@ -144,9 +168,9 @@ function addComponentToAsset(string assetTag) returns error? {
     http:Response response = check apiClient->post("/api/assets/" + assetTag + "/components", componentJson);
     
     if (response.statusCode >= 200 && response.statusCode < 300) {
-        io:println("✓ Component added successfully");
+        io:println("Component added successfully");
     } else {
-        io:println("✗ Failed to add component: Status " + response.statusCode.toString());
+        io:println(" Failed to add component: Status " + response.statusCode.toString());
         // Try to get error message from response
         json|error errorBody = response.getJsonPayload();
         if errorBody is json {
@@ -161,23 +185,24 @@ function addComponentToAsset(string assetTag) returns error? {
 function addScheduleToAsset(string assetTag) returns error? {
     io:println("6. Adding schedule to " + assetTag);
     
-    models:Schedule schedule = {
-        scheduleId: "SCHED-001",
+    // First schedule (overdue)
+    models:Schedule overdueSchedule = {
+        scheduleId: "SCHED-OVERDUE",
         scheduleType: "MAINTENANCE",
         frequency: "MONTHLY",
-        nextDueDate: {year: 2024, month: 12, day: 15},
-        description: "Monthly maintenance",
+        nextDueDate: "2023-01-01", 
+        description: "Overdue maintenance",
         status: "ACTIVE"
     };
     
     // Convert to JSON before sending
-    json scheduleJson = 'value:toJson(schedule);
-    http:Response response = check apiClient->post("/api/assets/" + assetTag + "/schedules", scheduleJson);
+    json overdueJson = 'value:toJson(overdueSchedule);
+    http:Response response = check apiClient->post("/api/assets/" + assetTag + "/schedules", overdueJson);
     
     if (response.statusCode >= 200 && response.statusCode < 300) {
-        io:println("✓ Schedule added successfully");
+        io:println(" Schedule added successfully");
     } else {
-        io:println("✗ Failed to add schedule: Status " + response.statusCode.toString());
+        io:println(" Failed to add schedule: Status " + response.statusCode.toString());
         json|error errorBody = response.getJsonPayload();
         if errorBody is json {
             string errorMsg = getStringFromJson(errorBody, "message", "Unknown error");
@@ -186,8 +211,34 @@ function addScheduleToAsset(string assetTag) returns error? {
         return error("Schedule addition failed");
     }
     io:println();
-}
 
+    // Second schedule (upcoming)
+    models:Schedule upcomingSchedule = {
+        scheduleId: "SCHED-UPCOMING",
+        scheduleType: "MAINTENANCE",
+        frequency: "MONTHLY",
+        nextDueDate: "2025-12-31", 
+        description: "Upcoming maintenance",
+        status: "ACTIVE"
+};
+
+// Convert to JSON before sending
+    json upcomingJson = 'value:toJson(upcomingSchedule);
+    http:Response response2 = check apiClient->post("/api/assets/" + assetTag + "/schedules", upcomingJson);
+    
+    if (response2.statusCode >= 200 && response2.statusCode < 300) {
+        io:println(" Schedule added successfully");
+    } else {
+        io:println(" Failed to add schedule: Status " + response2.statusCode.toString());
+        json|error errorBody = response2.getJsonPayload();
+        if errorBody is json {
+            string errorMsg = getStringFromJson(errorBody, "message", "Unknown error");
+            io:println("Error: " + errorMsg);
+        }
+        return error("Schedule addition failed");
+    }
+    io:println();
+}
 function createWorkOrder(string assetTag) returns error? {
     io:println("7. Creating work order for " + assetTag);
     
@@ -205,9 +256,9 @@ function createWorkOrder(string assetTag) returns error? {
     http:Response response = check apiClient->post("/api/assets/" + assetTag + "/workorders", workOrderJson);
     
     if (response.statusCode >= 200 && response.statusCode < 300) {
-        io:println("✓ Work order created successfully");
+        io:println(" Work order created successfully");
     } else {
-        io:println("✗ Failed to create work order: Status " + response.statusCode.toString());
+        io:println(" Failed to create work order: Status " + response.statusCode.toString());
         json|error errorBody = response.getJsonPayload();
         if errorBody is json {
             string errorMsg = getStringFromJson(errorBody, "message", "Unknown error");
@@ -235,9 +286,9 @@ function addTaskToWorkOrder(string assetTag, string workOrderId) returns error? 
     http:Response response = check apiClient->post("/api/assets/" + assetTag + "/workorders/" + workOrderId + "/tasks", taskJson);
     
     if (response.statusCode >= 200 && response.statusCode < 300) {
-        io:println("✓ Task added successfully");
+        io:println(" Task added successfully");
     } else {
-        io:println("✗ Failed to add task: Status " + response.statusCode.toString());
+        io:println(" Failed to add task: Status " + response.statusCode.toString());
         json|error errorBody = response.getJsonPayload();
         if errorBody is json {
             string errorMsg = getStringFromJson(errorBody, "message", "Unknown error");
@@ -257,4 +308,78 @@ function getStringFromJson(json jsonData, string fieldName, string defaultValue)
         }
     }
     return defaultValue;
+}
+
+// Update an asset
+function updateAsset(string assetTag) returns error? {
+    io:println("9. Updating asset: " + assetTag);
+    
+    // First get the existing asset
+    http:Response getResponse = check apiClient->get("/api/assets/" + assetTag);
+    if (getResponse.statusCode != 200) {
+        io:println("Cannot update - asset not found: " + assetTag);
+        return;
+    }
+    
+    // Create updated asset data
+    models:Asset updatedAsset = {
+        assetTag: assetTag,
+        name: "Updated Dell Laptop Pro",
+        faculty: "Computing & Informatics", 
+        department: "Cyber Security",
+        status: "UNDER_REPAIR", 
+        acquiredDate: {year: 2024, month: 1, day: 15}
+    };
+    
+    json assetJson = 'value:toJson(updatedAsset);
+    http:Response response = check apiClient->put("/api/assets/" + assetTag, assetJson);
+    
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+        io:println("Asset updated successfully");
+    } else {
+        io:println(" Failed to update asset: Status " + response.statusCode.toString());
+    }
+    io:println();
+}
+
+// Remove a component
+function removeComponent(string assetTag, string componentId) returns error? {
+    io:println("10. Removing component " + componentId + " from " + assetTag);
+    
+    http:Response response = check apiClient->delete("/api/assets/" + assetTag + "/components/" + componentId);
+    
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+        io:println(" Component removed successfully");
+    } else {
+        io:println("Failed to remove component: Status " + response.statusCode.toString());
+    }
+    io:println();
+}
+
+// Remove a schedule
+function removeSchedule(string assetTag, string scheduleId) returns error? {
+    io:println("11. Removing schedule " + scheduleId + " from " + assetTag);
+    
+    http:Response response = check apiClient->delete("/api/assets/" + assetTag + "/schedules/" + scheduleId);
+    
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+        io:println("Schedule removed successfully");
+    } else {
+        io:println("Failed to remove schedule: Status " + response.statusCode.toString());
+    }
+    io:println();
+}
+
+// Delete an asset
+function deleteAsset(string assetTag) returns error? {
+    io:println("12. Deleting asset: " + assetTag);
+    
+    http:Response response = check apiClient->delete("/api/assets/" + assetTag);
+    
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+        io:println("Asset deleted successfully");
+    } else {
+        io:println("Failed to delete asset: Status " + response.statusCode.toString());
+    }
+    io:println();
 }
