@@ -34,9 +34,33 @@ public function main() returns error? {
     if (result is error) {
         io:println(" Task addition failed: " + result.message());
     }
+
+    // Update operation (required by rubric)
+    result = updateAsset("LAP-001");
+    if (result is error) {
+        io:println("Asset update failed: " + result.message());
+    }
+    
+    // Remove operations (required by rubric)
+    result = removeComponent("LAP-001", "COMP-001");
+    if (result is error) {
+        io:println("Component removal failed: " + result.message());
+    }
+    
+    result = removeSchedule("LAP-001", "SCHED-001");
+    if (result is error) {
+        io:println("Schedule removal failed: " + result.message());
+    }
+    
+    // Delete operation (required by rubric)
+    result = deleteAsset("SRV-001");
+    if (result is error) {
+        io:println("Asset deletion failed: " + result.message());
+    }
     
     io:println("Demo completed!");
 }
+  
 
 function createTestAssets() returns error? {
     io:println("1. Creating test assets...");
@@ -257,4 +281,78 @@ function getStringFromJson(json jsonData, string fieldName, string defaultValue)
         }
     }
     return defaultValue;
+}
+
+// Update an asset
+function updateAsset(string assetTag) returns error? {
+    io:println("9. Updating asset: " + assetTag);
+    
+    // First get the existing asset
+    http:Response getResponse = check apiClient->get("/api/assets/" + assetTag);
+    if (getResponse.statusCode != 200) {
+        io:println("✗ Cannot update - asset not found: " + assetTag);
+        return;
+    }
+    
+    // Create updated asset data
+    models:Asset updatedAsset = {
+        assetTag: assetTag,
+        name: "Updated Dell Laptop Pro",
+        faculty: "Computing & Informatics", 
+        department: "Cyber Security",
+        status: "UNDER_REPAIR", // Changed status
+        acquiredDate: {year: 2024, month: 1, day: 15}
+    };
+    
+    json assetJson = 'value:toJson(updatedAsset);
+    http:Response response = check apiClient->put("/api/assets/" + assetTag, assetJson);
+    
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+        io:println("✓ Asset updated successfully");
+    } else {
+        io:println("✗ Failed to update asset: Status " + response.statusCode.toString());
+    }
+    io:println();
+}
+
+// Remove a component
+function removeComponent(string assetTag, string componentId) returns error? {
+    io:println("10. Removing component " + componentId + " from " + assetTag);
+    
+    http:Response response = check apiClient->delete("/api/assets/" + assetTag + "/components/" + componentId);
+    
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+        io:println("✓ Component removed successfully");
+    } else {
+        io:println("✗ Failed to remove component: Status " + response.statusCode.toString());
+    }
+    io:println();
+}
+
+// Remove a schedule
+function removeSchedule(string assetTag, string scheduleId) returns error? {
+    io:println("11. Removing schedule " + scheduleId + " from " + assetTag);
+    
+    http:Response response = check apiClient->delete("/api/assets/" + assetTag + "/schedules/" + scheduleId);
+    
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+        io:println("✓ Schedule removed successfully");
+    } else {
+        io:println("✗ Failed to remove schedule: Status " + response.statusCode.toString());
+    }
+    io:println();
+}
+
+// Delete an asset
+function deleteAsset(string assetTag) returns error? {
+    io:println("12. Deleting asset: " + assetTag);
+    
+    http:Response response = check apiClient->delete("/api/assets/" + assetTag);
+    
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+        io:println("✓ Asset deleted successfully");
+    } else {
+        io:println("✗ Failed to delete asset: Status " + response.statusCode.toString());
+    }
+    io:println();
 }
