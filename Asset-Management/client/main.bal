@@ -190,7 +190,7 @@ function addScheduleToAsset(string assetTag) returns error? {
         scheduleId: "SCHED-OVERDUE",
         scheduleType: "MAINTENANCE",
         frequency: "MONTHLY",
-        nextDueDate: "2024-01-01", 
+        nextDueDate: "2023-01-01", 
         description: "Overdue maintenance",
         status: "ACTIVE"
     };
@@ -217,7 +217,7 @@ function addScheduleToAsset(string assetTag) returns error? {
         scheduleId: "SCHED-UPCOMING",
         scheduleType: "MAINTENANCE",
         frequency: "MONTHLY",
-        nextDueDate: "2024-12-31", 
+        nextDueDate: "2025-12-31", 
         description: "Upcoming maintenance",
         status: "ACTIVE"
 };
