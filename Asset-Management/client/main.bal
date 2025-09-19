@@ -35,13 +35,13 @@ public function main() returns error? {
         io:println(" Task addition failed: " + result.message());
     }
 
-    // Update operation (required by rubric)
+    // Update operation 
     result = updateAsset("LAP-001");
     if (result is error) {
         io:println("Asset update failed: " + result.message());
     }
     
-    // Remove operations (required by rubric)
+    // Remove operations 
     result = removeComponent("LAP-001", "COMP-001");
     if (result is error) {
         io:println("Component removal failed: " + result.message());
@@ -52,7 +52,7 @@ public function main() returns error? {
         io:println("Schedule removal failed: " + result.message());
     }
     
-    // Delete operation (required by rubric)
+    // Delete operation 
     result = deleteAsset("SRV-001");
     if (result is error) {
         io:println("Asset deletion failed: " + result.message());
@@ -300,7 +300,7 @@ function updateAsset(string assetTag) returns error? {
         name: "Updated Dell Laptop Pro",
         faculty: "Computing & Informatics", 
         department: "Cyber Security",
-        status: "UNDER_REPAIR", // Changed status
+        status: "UNDER_REPAIR", 
         acquiredDate: {year: 2024, month: 1, day: 15}
     };
     
