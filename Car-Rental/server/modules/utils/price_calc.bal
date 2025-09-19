@@ -1,6 +1,6 @@
 import ballerina/time;
 
-//////----Cal the number of rental days (inclusive)----
+///----Cal the number of rental days (inclusive)---- ///
 
 public function calculateDays(time:Utc startDate, time:Utc endDate) returns int|error {
     if startDate[0] > endDate[0] {
@@ -12,24 +12,22 @@ public function calculateDays(time:Utc startDate, time:Utc endDate) returns int|
 
 
 
-/////// ----Cal tot price for a rental----
+/// ----Cal tot price for a rental---- ///
 public function calculatePrice(float dailyRate, int days) returns float { return dailyRate * days;}
 
-////// ----Sums up multiple prices----
+/// ----Sums up multiple prices---- ///
 public function calculateTotal(float[] prices) returns float {
     float total = 0;
     foreach var price in prices { total += price;}
     return total;}
-    
-    /// ----Calculate taxes (e.g., VAT, service tax)----
+     
+    /// ----Calculate taxes (e.g., VAT, service tax)---- ///
 
-/// ----taxRate: Tax rate (default 10%)----
+/// ----taxRate: Tax rate (default 10%)---- ///
 
-# Description.
-#
-# + baseAmount - parameter description  
-# + taxRate - parameter description
-# + return - return value description
+
+
+
 public function calculateTax(float baseAmount, float taxRate = 0.10) returns float {
     if baseAmount <= 0.0 {
         return 0.0;}
