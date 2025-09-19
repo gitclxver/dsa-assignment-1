@@ -1,17 +1,22 @@
 import ballerinax/mongodb;
 import ballerina/time;
 import ballerina/log;
+import ballerina/lang.'value;
 
 import asset_management.models;
 import asset_management.config;
 
 // Asset repository for MongoDB operations
-
 public isolated class AssetRepository {
     private final mongodb:Collection assets;
 
     public isolated function init(mongodb:Collection assets) {
         self.assets = assets;
+    }
+
+    // Helper function to create MongoDB Update objects with proper operators
+    private isolated function createUpdate(string operator, map<json> updateData) returns mongodb:Update {
+        return {[operator]: updateData};
     }
 
     // ---------------- Asset Operations ----------------
@@ -34,7 +39,7 @@ public isolated class AssetRepository {
     }
 
     public isolated function getAsset(string assetTag) returns models:Asset|error {
-        models:Asset? result = check self.assets->findOne({assetTag: assetTag});
+        models:Asset? result = check self.assets->findOne({ "assetTag": assetTag });
         if result is () {
             return error(config:ASSET_NOT_FOUND);
         }
@@ -42,10 +47,9 @@ public isolated class AssetRepository {
     }
 
     public isolated function updateAsset(string assetTag, models:Asset asset) returns models:Asset|error {
-        mongodb:UpdateResult result = check self.assets->updateOne(
-            {assetTag: assetTag},
-            {"$set": <map<json>>asset.toJson()}
-        );
+        map<json> assetMap = <map<json>>'value:toJson(asset);
+        mongodb:Update updateObj = self.createUpdate("set", assetMap);
+        mongodb:UpdateResult result = check self.assets->updateOne({ "assetTag": assetTag }, updateObj);
         if result.matchedCount == 0 {
             return error(config:ASSET_NOT_FOUND);
         }
@@ -54,7 +58,7 @@ public isolated class AssetRepository {
     }
 
     public isolated function deleteAsset(string assetTag) returns error? {
-        mongodb:DeleteResult result = check self.assets->deleteOne({assetTag: assetTag});
+        mongodb:DeleteResult result = check self.assets->deleteOne({ "assetTag": assetTag });
         if result.deletedCount == 0 {
             return error(config:ASSET_NOT_FOUND);
         }
@@ -62,7 +66,7 @@ public isolated class AssetRepository {
     }
 
     public isolated function getAssetsByFaculty(string faculty) returns models:Asset[]|error {
-        stream<models:Asset, error?> resultStream = check self.assets->find({faculty: faculty});
+        stream<models:Asset, error?> resultStream = check self.assets->find({ "faculty": faculty });
         models:Asset[] assets = [];
         record {| models:Asset value; |}|error? next = resultStream.next();
         while next is record {| models:Asset value; |} {
@@ -77,10 +81,11 @@ public isolated class AssetRepository {
         time:Utc currentTime = time:utcNow();
         string currentDateStr = time:utcToString(currentTime);
 
-        stream<models:Asset, error?> resultStream = check self.assets->find({
-            "schedules.nextDueDate": {"$lt": currentDateStr},
-            "schedules.status": config:SCHEDULE_ACTIVE
-        });
+        map<json> query = {};
+        query["schedules.nextDueDate"] = {"$lt": currentDateStr};
+        query["schedules.status"] = config:SCHEDULE_ACTIVE;
+
+        stream<models:Asset, error?> resultStream = check self.assets->find(query);
 
         models:Asset[] assets = [];
         record {| models:Asset value; |}|error? next = resultStream.next();
@@ -94,10 +99,8 @@ public isolated class AssetRepository {
 
     // ---------------- Component Operations ----------------
     public isolated function addComponent(string assetTag, models:Component component) returns models:Asset|error {
-        mongodb:UpdateResult result = check self.assets->updateOne(
-            {assetTag: assetTag},
-            {"$push": {components: <json>component}}
-        );
+        mongodb:Update updateObj = self.createUpdate("push", { "components": component.toJson() });
+        mongodb:UpdateResult result = check self.assets->updateOne({ "assetTag": assetTag }, updateObj);
         if result.matchedCount == 0 {
             return error(config:ASSET_NOT_FOUND);
         }
@@ -105,10 +108,8 @@ public isolated class AssetRepository {
     }
 
     public isolated function removeComponent(string assetTag, string componentId) returns models:Asset|error {
-        mongodb:UpdateResult result = check self.assets->updateOne(
-            {assetTag: assetTag},
-            {"$pull": {components: {componentId: componentId}}}
-        );
+        mongodb:Update updateObj = self.createUpdate("pull", { "components": { "componentId": componentId } });
+        mongodb:UpdateResult result = check self.assets->updateOne({ "assetTag": assetTag }, updateObj);
         if result.matchedCount == 0 {
             return error(config:ASSET_NOT_FOUND);
         }
@@ -117,10 +118,8 @@ public isolated class AssetRepository {
 
     // ---------------- Schedule Operations ----------------
     public isolated function addSchedule(string assetTag, models:Schedule schedule) returns models:Asset|error {
-        mongodb:UpdateResult result = check self.assets->updateOne(
-            {assetTag: assetTag},
-            {"$push": {schedules: <json>schedule}}
-        );
+        mongodb:Update updateObj = self.createUpdate("push", { "schedules": 'value:toJson(schedule) });
+        mongodb:UpdateResult result = check self.assets->updateOne({ "assetTag": assetTag }, updateObj);
         if result.matchedCount == 0 {
             return error(config:ASSET_NOT_FOUND);
         }
@@ -128,10 +127,8 @@ public isolated class AssetRepository {
     }
 
     public isolated function removeSchedule(string assetTag, string scheduleId) returns models:Asset|error {
-        mongodb:UpdateResult result = check self.assets->updateOne(
-            {assetTag: assetTag},
-            {"$pull": {schedules: {scheduleId: scheduleId}}}
-        );
+        mongodb:Update updateObj = self.createUpdate("pull", { "schedules": { "scheduleId": scheduleId } });
+        mongodb:UpdateResult result = check self.assets->updateOne({ "assetTag": assetTag }, updateObj);
         if result.matchedCount == 0 {
             return error(config:ASSET_NOT_FOUND);
         }
@@ -139,11 +136,8 @@ public isolated class AssetRepository {
     }
 
     public isolated function completeSchedule(string assetTag, string scheduleId) returns models:Asset|error {
-        // mark schedule as completed
-        mongodb:UpdateResult result = check self.assets->updateOne(
-            {assetTag: assetTag, "schedules.scheduleId": scheduleId},
-            {"$set": {"schedules.$.status": config:COMPLETED}}
-        );
+        mongodb:Update updateObj = self.createUpdate("set", { "schedules.$.status": config:COMPLETED });
+        mongodb:UpdateResult result = check self.assets->updateOne({ "assetTag": assetTag, "schedules.scheduleId": scheduleId }, updateObj);
         if result.matchedCount == 0 {
             return error(config:SCHEDULE_NOT_FOUND);
         }
@@ -152,10 +146,8 @@ public isolated class AssetRepository {
 
     // ---------------- WorkOrder Operations ----------------
     public isolated function addWorkOrder(string assetTag, models:WorkOrder workOrder) returns models:Asset|error {
-        mongodb:UpdateResult result = check self.assets->updateOne(
-            {assetTag: assetTag},
-            {"$push": {workOrders: <json>workOrder}}
-        );
+        mongodb:Update updateObj = self.createUpdate("push", { "workOrders": 'value:toJson(workOrder) });
+        mongodb:UpdateResult result = check self.assets->updateOne({ "assetTag": assetTag }, updateObj);
         if result.matchedCount == 0 {
             return error(config:ASSET_NOT_FOUND);
         }
@@ -163,43 +155,36 @@ public isolated class AssetRepository {
     }
 
     public isolated function updateWorkOrder(string assetTag, string workOrderId, models:WorkOrder workOrder) returns models:Asset|error {
-    mongodb:UpdateResult removeResult = check self.assets->updateOne(
-        {assetTag: assetTag},
-        {"$pull": {workOrders: {workOrderId: workOrderId}}}
-    );
-    if removeResult.matchedCount == 0 {
-        return error(config:WORKORDER_NOT_FOUND);
-    }
-    mongodb:UpdateResult addResult = check self.assets->updateOne(
-        {assetTag: assetTag},
-        {"$push": {workOrders: <json>workOrder}}
-    );
+        // Remove old work order
+        mongodb:Update removeObj = self.createUpdate("pull", { "workOrders": { "workOrderId": workOrderId } });
+        mongodb:UpdateResult removeResult = check self.assets->updateOne({ "assetTag": assetTag }, removeObj);
+        if removeResult.matchedCount == 0 {
+            return error(config:WORKORDER_NOT_FOUND);
+        }
 
-    // Check if the add operation was successful
-    if addResult.matchedCount == 0 {
-        return error(config:ASSET_NOT_FOUND);
-    }
+        // Add new work order
+        mongodb:Update addObj = self.createUpdate("push", { "workOrders": 'value:toJson(workOrder) });
+        mongodb:UpdateResult addResult = check self.assets->updateOne({ "assetTag": assetTag }, addObj);
+        if addResult.matchedCount == 0 {
+            return error(config:ASSET_NOT_FOUND);
+        }
 
-    return self.getAsset(assetTag);
-}
+        return self.getAsset(assetTag);
+    }
 
     public isolated function completeWorkOrder(string assetTag, string workOrderId) returns models:Asset|error {
-        mongodb:UpdateResult result = check self.assets->updateOne(
-            {assetTag: assetTag, "workOrders.workOrderId": workOrderId},
-            {"$set": {"workOrders.$.status": config:COMPLETED}}
-        );
+        mongodb:Update updateObj = self.createUpdate("set", { "workOrders.$.status": config:COMPLETED });
+        mongodb:UpdateResult result = check self.assets->updateOne({ "assetTag": assetTag, "workOrders.workOrderId": workOrderId }, updateObj);
         if result.matchedCount == 0 {
             return error(config:WORKORDER_NOT_FOUND);
         }
         return self.getAsset(assetTag);
     }
 
-    // Task Operations
+    //Task Operations
     public isolated function addTask(string assetTag, string workOrderId, models:Task task) returns models:Asset|error {
-        mongodb:UpdateResult result = check self.assets->updateOne(
-            {assetTag: assetTag, "workOrders.workOrderId": workOrderId},
-            {"$push": {"workOrders.$.tasks": <json>task}}
-        );
+        mongodb:Update updateObj = self.createUpdate("push", { "workOrders.$.tasks": 'value:toJson(task) });
+        mongodb:UpdateResult result = check self.assets->updateOne({ "assetTag": assetTag, "workOrders.workOrderId": workOrderId }, updateObj);
         if result.matchedCount == 0 {
             return error(config:WORKORDER_NOT_FOUND);
         }
@@ -207,10 +192,8 @@ public isolated class AssetRepository {
     }
 
     public isolated function removeTask(string assetTag, string workOrderId, string taskId) returns models:Asset|error {
-        mongodb:UpdateResult result = check self.assets->updateOne(
-            {assetTag: assetTag, "workOrders.workOrderId": workOrderId},
-            {"$pull": {"workOrders.$.tasks": {taskId: taskId}}}
-        );
+        mongodb:Update updateObj = self.createUpdate("pull", { "workOrders.$.tasks": { "taskId": taskId } });
+        mongodb:UpdateResult result = check self.assets->updateOne({ "assetTag": assetTag, "workOrders.workOrderId": workOrderId }, updateObj);
         if result.matchedCount == 0 {
             return error(config:TASK_NOT_FOUND);
         }
@@ -218,9 +201,10 @@ public isolated class AssetRepository {
     }
 
     public isolated function completeTask(string assetTag, string workOrderId, string taskId) returns models:Asset|error {
+        mongodb:Update updateObj = self.createUpdate("$set", { "workOrders.$.tasks.$.status": config:COMPLETED });
         mongodb:UpdateResult result = check self.assets->updateOne(
-            {assetTag: assetTag, "workOrders.workOrderId": workOrderId, "workOrders.$.tasks.taskId": taskId},
-            {"$set": {"workOrders.$.tasks.$.status": config:COMPLETED}}
+            { "assetTag": assetTag, "workOrders.workOrderId": workOrderId, "workOrders.tasks.taskId": taskId },
+            updateObj
         );
         if result.matchedCount == 0 {
             return error(config:TASK_NOT_FOUND);
