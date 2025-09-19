@@ -1,0 +1,113 @@
+syntax = "proto3";
+
+package carrental;
+
+enum UserRole {
+    CUSTOMER = 0;
+    ADMIN = 1;
+}
+
+enum CarStatus {
+    AVAILABLE = 0;
+    UNAVAILABLE = 1;
+}
+
+message Car {
+    string plate = 1;
+    string make = 2;
+    string model = 3;
+    int32 year = 4;
+    float daily_price = 5;
+    int32 mileage = 6;
+    CarStatus status = 7;
+}
+
+message User {
+    string id = 1;
+    string name = 2;
+    UserRole role = 3;
+}
+
+message Reservation {
+    string id = 1;
+    string user_id = 2;
+    repeated CartItem items = 3;
+    float total_price = 4;
+}
+
+message CartItem {
+    string car_plate = 1;
+    string start_date = 2;
+    string end_date = 3;
+    float price = 4;
+}
+
+message AddCarRequest {
+    Car car = 1;
+}
+
+message AddCarResponse {
+    string plate = 1;
+}
+
+message UpdateCarRequest {
+    string plate = 1;
+    Car car = 2;
+}
+
+message RemoveCarRequest {
+    string plate = 1;
+}
+
+message ListAvailableCarsRequest {
+    string filter = 1;
+}
+
+message SearchCarRequest {
+    string plate = 1;
+}
+
+message AddToCartRequest {
+    string user_id = 1;
+    string car_plate = 2;
+    string start_date = 3;
+    string end_date = 4;
+}
+
+message PlaceReservationRequest {
+    string user_id = 1;
+}
+
+message CreateUsersRequest {
+    repeated User users = 1;
+}
+
+message CreateUsersResponse {
+    int32 count = 1;
+}
+
+message CarList {
+    repeated Car cars = 1;
+}
+
+message CartResponse {
+    bool success = 1;
+    string message = 2;
+}
+
+message ReservationResponse {
+    bool success = 1;
+    string message = 2;
+    Reservation reservation = 3;
+}
+
+service CarRentalService {
+    rpc add_car(AddCarRequest) returns (AddCarResponse);
+    rpc create_users(CreateUsersRequest) returns (CreateUsersResponse);
+    rpc update_car(UpdateCarRequest) returns (Car);
+    rpc remove_car(RemoveCarRequest) returns (CarList);
+    rpc list_available_cars(ListAvailableCarsRequest) returns (stream Car);
+    rpc search_car(SearchCarRequest) returns (Car);
+    rpc add_to_cart(AddToCartRequest) returns (CartResponse);
+    rpc place_reservation(PlaceReservationRequest) returns (ReservationResponse);
+}
