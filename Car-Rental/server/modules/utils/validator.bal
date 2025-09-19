@@ -19,10 +19,6 @@ public function validateCarDetails(string make, string model, int year, float da
         return false;}
     return true;}
 
-/// ----Validates rental date range---- ///
-
-  
-
 /// ----Validates rental date range using Civil time----- ///
 public function validateDates(time:Civil startDate, time:Civil endDate) returns boolean {
     time:Utc|error startUtc = time:utcFromCivil(startDate);

@@ -21,10 +21,8 @@ public function calculateTotal(float[] prices) returns float {
     foreach var price in prices { total += price;}
     return total;}
      
-    /// ----Calculate taxes (e.g., VAT, service tax)---- ///
 
-/// ----taxRate: Tax rate (default 10%)---- ///
-
+/// ----Tax rate (default 10%)---- ///
 public function calculateTax(float baseAmount, float taxRate = 0.10) returns float {
     if baseAmount <= 0.0 {
         return 0.0;}
