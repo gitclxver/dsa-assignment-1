@@ -25,9 +25,6 @@ public function calculateTotal(float[] prices) returns float {
 
 /// ----taxRate: Tax rate (default 10%)---- ///
 
-
-
-
 public function calculateTax(float baseAmount, float taxRate = 0.10) returns float {
     if baseAmount <= 0.0 {
         return 0.0;}
