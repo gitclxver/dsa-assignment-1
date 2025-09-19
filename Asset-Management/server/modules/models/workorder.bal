@@ -10,7 +10,6 @@ public type WorkOrder record {|
     Task[] tasks?;
 |};
 
-// WorkOrder creation request
 public type WorkOrderRequest record {|
     string title;
     string description;
