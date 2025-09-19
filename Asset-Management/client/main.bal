@@ -189,7 +189,7 @@ function addScheduleToAsset(string assetTag) returns error? {
         scheduleId: "SCHED-001",
         scheduleType: "MAINTENANCE",
         frequency: "MONTHLY",
-        nextDueDate: {year: 2024, month: 12, day: 15},
+        nextDueDate: "2024-12-15",
         description: "Monthly maintenance",
         status: "ACTIVE"
     };

@@ -32,7 +32,7 @@ public type Schedule record {|
     string scheduleId;
     string scheduleType;
     string frequency;
-    string|time:Date nextDueDate;
+    string nextDueDate;
     string description;
     string status;
 |};
@@ -41,7 +41,7 @@ public type Schedule record {|
 public type ScheduleRequest record {|
     string scheduleType;
     string frequency;
-    string|time:Date nextDueDate;
+    string nextDueDate;
     string description;
     string status;
 |};
