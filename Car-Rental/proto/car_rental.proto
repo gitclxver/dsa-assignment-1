@@ -26,6 +26,7 @@ message User {
     string id = 1;
     string name = 2;
     UserRole role = 3;
+    repeated CartItem cart = 4;
 }
 
 message Reservation {
@@ -37,9 +38,8 @@ message Reservation {
 
 message CartItem {
     string car_plate = 1;
-    string start_date = 2;
-    string end_date = 3;
-    float price = 4;
+    int32 days_to_rent = 2;
+    float price = 3;
 }
 
 message AddCarRequest {
@@ -70,8 +70,7 @@ message SearchCarRequest {
 message AddToCartRequest {
     string user_id = 1;
     string car_plate = 2;
-    string start_date = 3;
-    string end_date = 4;
+    int32 days_to_rent = 3; 
 }
 
 message PlaceReservationRequest {
