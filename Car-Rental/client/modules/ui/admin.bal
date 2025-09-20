@@ -1,36 +1,38 @@
-
 import ballerina/io;
 import ballerina/grpc;
 
+// Import the actual generated files
+import car_rental_pb;              
+import carentalservice_client;    
 
 public function main() returns error? {
-  
-    CarRentalServiceClient client = check new("http://localhost:9090");
+   
+    carentalservice_client:CarRentalServiceClient client = check new("http://localhost:9090");
     
-    io:println("Car Rental System - Admin Portal");
-    io:println("=================================");
+    io:println("Car Rental System - Admin");
+    io:println("=========================");
     
-    string adminId = getAdminInfo();
+    // Get admin ID
+    io:print("Enter your admin ID: ");
+    string adminId = io:readln().trim();
     
     while (true) {
         showAdminMenu();
         string choice = io:readln().trim();
         
         if (choice == "1") {
-            addCar(client);
+            check addCar(client);
         } else if (choice == "2") {
-            createUsers(client);
+            check createUsers(client);
         } else if (choice == "3") {
-            updateCar(client);
+            check updateCar(client);
         } else if (choice == "4") {
-            removeCar(client);
+            check removeCar(client);
         } else if (choice == "5") {
-            listReservations(client, adminId);
-        } else if (choice == "6") {
-            io:println("Admin session ended.");
+            io:println("Goodbye!");
             break;
         } else {
-            io:println("Invalid option. Try again.");
+            io:println("Invalid choice. Try again.");
         }
         
         io:println("");
@@ -39,26 +41,20 @@ public function main() returns error? {
     }
 }
 
-function getAdminInfo() returns string {
-    io:print("Enter admin ID: ");
-    return io:readln().trim();
-}
-
 function showAdminMenu() {
     io:println("\n--- Admin Menu ---");
     io:println("1. Add car");
     io:println("2. Create users");
     io:println("3. Update car");
     io:println("4. Remove car");
-    io:println("5. List reservations");
-    io:println("6. Exit");
+    io:println("5. Exit");
     io:print("Choose option: ");
 }
 
-function addCar(CarRentalServiceClient client) {
+function addCar(carentalservice_client:CarRentalServiceClient client) returns error? {
     io:println("\n--- Add New Car ---");
     
-    io:print("Plate number: ");
+    io:print("Plate: ");
     string plate = io:readln().trim();
     
     io:print("Make: ");
@@ -76,13 +72,12 @@ function addCar(CarRentalServiceClient client) {
     io:print("Mileage: ");
     string mileageStr = io:readln().trim();
     
-    // Basic validation
+    // Validation
     if (plate == "" || make == "" || model == "" || yearStr == "" || priceStr == "" || mileageStr == "") {
         io:println("All fields required!");
         return;
     }
     
-    // Convert strings to numbers
     int|error year = int:fromString(yearStr);
     float|error price = float:fromString(priceStr);
     int|error mileage = int:fromString(mileageStr);
@@ -92,38 +87,35 @@ function addCar(CarRentalServiceClient client) {
         return;
     }
     
-    // Create car object
-    Car newCar = {
+    // Create Car object using generated types
+    car_rental_pb:Car newCar = {
         plate: plate,
         make: make,
         model: model,
         year: year,
         daily_price: price,
         mileage: mileage,
-        status: "AVAILABLE"
+        status: car_rental_pb:AVAILABLE  // Using generated enum
     };
     
-    // Call gRPC service
-    AddCarRequest request = {car: newCar};
+    // Create request using generated types
+    car_rental_pb:AddCarRequest request = {car: newCar};
     
-    // connects to add_car service
-    // AddCarResponse response = check client->AddCar(request);
-    // 
-    // if (response.success) {
-    //     io:println("Car added successfully!");
-    //     io:println("Car plate: " + response.plate);
-    // } else {
-    //     io:println("Failed to add car: " + response.message);
-    // }
+    // Call the generated gRPC method
+    car_rental_pb:AddCarResponse|grpc:Error response = client->add_car(request);
     
-    io:println("Calling: add_car service");
-    io:println("Adding car: " + make + " " + model + " (" + plate + ")");
+    if (response is car_rental_pb:AddCarResponse) {
+        io:println("✓ Car added successfully!");
+        io:println("Car plate: " + response.plate);
+    } else {
+        io:println("✗ Failed to add car.");
+    }
 }
 
-function createUsers(CarRentalServiceClient client) {
+function createUsers(carentalservice_client:CarRentalServiceClient client) returns error? {
     io:println("\n--- Create Users ---");
     
-    io:print("How many users to create? ");
+    io:print("How many users? ");
     string countStr = io:readln().trim();
     
     int|error userCount = int:fromString(countStr);
@@ -132,7 +124,7 @@ function createUsers(CarRentalServiceClient client) {
         return;
     }
     
-    User[] users = [];
+    car_rental_pb:User[] users = [];
     
     int i = 1;
     while (i <= userCount) {
@@ -144,21 +136,28 @@ function createUsers(CarRentalServiceClient client) {
         io:print("Name: ");
         string name = io:readln().trim();
         
-        io:print("Role (CUSTOMER/ADMIN): ");
-        string role = io:readln().trim().toUpperAscii();
-        
-        if (role != "CUSTOMER" && role != "ADMIN") {
-            io:println("Invalid role! Use CUSTOMER or ADMIN.");
-            continue;
-        }
+        io:print("Role (1=CUSTOMER, 2=ADMIN): ");
+        string roleStr = io:readln().trim();
         
         if (userId == "" || name == "") {
             io:println("User ID and name required!");
             continue;
         }
         
-        User user = {
-            user_id: userId,
+        // Convert role to generated enum (proto uses 0=CUSTOMER, 1=ADMIN)
+        car_rental_pb:UserRole role;
+        if (roleStr == "1") {
+            role = car_rental_pb:CUSTOMER;
+        } else if (roleStr == "2") {
+            role = car_rental_pb:ADMIN;
+        } else {
+            io:println("Invalid role! Use 1 for CUSTOMER or 2 for ADMIN.");
+            continue;
+        }
+        
+        // Create user using generated types
+        car_rental_pb:User user = {
+            id: userId,  
             name: name,
             role: role
         };
@@ -167,107 +166,116 @@ function createUsers(CarRentalServiceClient client) {
         i += 1;
     }
     
-    // Call gRPC service
-    CreateUsersRequest request = {users: users};
+    // Create request using generated types
+    car_rental_pb:CreateUsersRequest request = {users: users};
     
-    // This connects to create_users service
-    // CreateUsersResponse response = check client->CreateUsers(request);
-    // 
-    // if (response.success) {
-    //     io:println("All users created successfully!");
-    // } else {
-    //     io:println("Failed to create users: " + response.message);
-    // }
+    // Call the generated gRPC method
+    car_rental_pb:CreateUsersResponse|grpc:Error response = client->create_users(request);
     
-    io:println("Calling: create_users service");
-    io:println(string `Creating ${userCount} users`);
+    if (response is car_rental_pb:CreateUsersResponse) {
+        io:println(string `✓ Successfully created ${response.count} users!`);
+    } else {
+        io:println("✗ Failed to create users.");
+    }
 }
 
-function updateCar(CarRentalServiceClient client) {
+function updateCar(carentalservice_client:CarRentalServiceClient client) returns error? {
     io:println("\n--- Update Car ---");
     
-    io:print("Enter plate number of car to update: ");
+    io:print("Enter plate of car to update: ");
     string plate = io:readln().trim();
     
     if (plate == "") {
-        io:println("Plate number required!");
+        io:println("Plate required!");
         return;
     }
     
-    io:println("What to update?");
-    io:println("1. Daily price");
-    io:println("2. Status");
-    io:println("3. Mileage");
-    io:print("Choose: ");
+    io:println("\nEnter new car details:");
     
-    string updateChoice = io:readln().trim();
+    io:print("Make: ");
+    string make = io:readln().trim();
     
-    if (updateChoice == "1") {
-        io:print("New daily price: ");
-        string priceStr = io:readln().trim();
-        float|error newPrice = float:fromString(priceStr);
-        
-        if (newPrice is error) {
-            io:println("Invalid price!");
-            return;
-        }
-        
-        io:println("Updating price for " + plate + " to $" + newPrice.toString());
-        
-    } else if (updateChoice == "2") {
-        io:print("New status (AVAILABLE/UNAVAILABLE): ");
-        string newStatus = io:readln().trim().toUpperAscii();
-        
-        if (newStatus != "AVAILABLE" && newStatus != "UNAVAILABLE") {
-            io:println("Invalid status!");
-            return;
-        }
-        
-        io:println("Updating status for " + plate + " to " + newStatus);
-        
-    } else if (updateChoice == "3") {
-        io:print("New mileage: ");
-        string mileageStr = io:readln().trim();
-        int|error newMileage = int:fromString(mileageStr);
-        
-        if (newMileage is error) {
-            io:println("Invalid mileage!");
-            return;
-        }
-        
-        io:println("Updating mileage for " + plate + " to " + newMileage.toString());
-        
+    io:print("Model: ");
+    string model = io:readln().trim();
+    
+    io:print("Year: ");
+    string yearStr = io:readln().trim();
+    
+    io:print("Daily price: ");
+    string priceStr = io:readln().trim();
+    
+    io:print("Mileage: ");
+    string mileageStr = io:readln().trim();
+    
+    io:print("Status (1=AVAILABLE, 2=UNAVAILABLE): ");
+    string statusStr = io:readln().trim();
+    
+    // Validation
+    if (make == "" || model == "" || yearStr == "" || priceStr == "" || mileageStr == "" || statusStr == "") {
+        io:println("All fields required!");
+        return;
+    }
+    
+    int|error year = int:fromString(yearStr);
+    float|error price = float:fromString(priceStr);
+    int|error mileage = int:fromString(mileageStr);
+    
+    if (year is error || price is error || mileage is error) {
+        io:println("Invalid number format!");
+        return;
+    }
+    
+    // Convert status to generated enum
+    car_rental_pb:CarStatus status;
+    if (statusStr == "1") {
+        status = car_rental_pb:AVAILABLE;
+    } else if (statusStr == "2") {
+        status = car_rental_pb:UNAVAILABLE;
     } else {
-        io:println("Invalid choice!");
+        io:println("Invalid status! Use 1 for AVAILABLE or 2 for UNAVAILABLE.");
         return;
     }
     
-    // Call gRPC service
-    // This connects to  update_car service
-    // UpdateCarRequest request = {plate: plate, updated_car: updatedCar};
-    // UpdateCarResponse response = check client->UpdateCar(request);
-    // 
-    // if (response.success) {
-    //     io:println("Car updated successfully!");
-    // } else {
-    //     io:println("Update failed: " + response.message);
-    // }
+    // Create updated car using generated types
+    car_rental_pb:Car updatedCar = {
+        plate: plate,
+        make: make,
+        model: model,
+        year: year,
+        daily_price: price,
+        mileage: mileage,
+        status: status
+    };
     
-    io:println("Calling: update_car service");
+    // Create request using generated types
+    car_rental_pb:UpdateCarRequest request = {
+        plate: plate,
+        car: updatedCar
+    };
+    
+    // Call the generated gRPC method
+    car_rental_pb:Car|grpc:Error response = client->update_car(request);
+    
+    if (response is car_rental_pb:Car) {
+        io:println("✓ Car updated successfully!");
+        io:println("Updated car: " + response.make + " " + response.model + " (" + response.plate + ")");
+    } else {
+        io:println("✗ Failed to update car.");
+    }
 }
 
-function removeCar(CarRentalServiceClient client) {
+function removeCar(carentalservice_client:CarRentalServiceClient client) returns error? {
     io:println("\n--- Remove Car ---");
     
-    io:print("Enter plate number to remove: ");
+    io:print("Enter plate to remove: ");
     string plate = io:readln().trim();
     
     if (plate == "") {
-        io:println("Plate number required!");
+        io:println("Plate required!");
         return;
     }
     
-    io:print("Are you sure you want to remove " + plate + "? (yes/no): ");
+    io:print("Are you sure? (yes/no): ");
     string confirm = io:readln().trim().toLowerAscii();
     
     if (confirm != "yes" && confirm != "y") {
@@ -275,37 +283,23 @@ function removeCar(CarRentalServiceClient client) {
         return;
     }
     
-    // Call gRPC service
-    RemoveCarRequest request = {plate: plate};
+    // Create request using generated types
+    car_rental_pb:RemoveCarRequest request = {plate: plate};
     
-    // This connects to remove_car service
-    // RemoveCarResponse response = check client->RemoveCar(request);
-    // 
-    // io:println("Car removed. Remaining inventory:");
-    // foreach Car car in response.remaining_cars {
-    //     io:println(car.plate + " - " + car.make + " " + car.model);
-    // }
+    // Call the generated gRPC method
+    car_rental_pb:CarList|grpc:Error response = client->remove_car(request);
     
-    io:println("Calling: remove_car service");
-    io:println("Removing car: " + plate);
-}
-
-function listReservations(CarRentalServiceClient client, string adminId) {
-    io:println("\n--- All Reservations ---");
-    
-    // Call gRPC service
-    ListReservationsRequest request = {admin_id: adminId};
-    
-    // This connects to list_reservations service
-    // ListReservationsResponse response = check client->ListReservations(request);
-    // 
-    // io:println("Reservation ID  Customer    Car       Start Date  End Date    Price     Status");
-    // io:println("--------------------------------------------------------------------------");
-    // 
-    // foreach Reservation res in response.reservations {
-    //     io:println(string `${res.reservation_id}  ${res.customer_id}  ${res.car_plate}  ${res.start_date}  ${res.end_date}  $${res.total_price}  ${res.status}`);
-    // }
-    
-    io:println("Calling: list_reservations service");
-    io:println("Admin: " + adminId);
+    if (response is car_rental_pb:CarList) {
+        io:println("✓ Car removed successfully!");
+        io:println(string `\nRemaining cars (${response.cars.length()}):`);
+        io:println("PLATE      MAKE         MODEL        STATUS");
+        io:println("------------------------------------------");
+        
+        foreach car_rental_pb:Car car in response.cars {
+            string status = car.status == car_rental_pb:AVAILABLE ? "AVAILABLE" : "UNAVAILABLE";
+            io:println(string `${car.plate:<10} ${car.make:<12} ${car.model:<12} ${status}`);
+        }
+    } else {
+        io:println("✗ Failed to remove car.");
+    }
 }
