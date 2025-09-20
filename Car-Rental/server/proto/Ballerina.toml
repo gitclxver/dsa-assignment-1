@@ -1,5 +1,5 @@
 [package]
-org = "server"
+org = "dsa_assignment"
 name = "car_rental"
 version = "0.1.0"
 distribution = "2201.12.9"
