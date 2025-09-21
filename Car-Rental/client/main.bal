@@ -3,7 +3,7 @@ import 'client.ui;
 
 
 public function main() returns error? {
-    io:println("=== Car Rental System ===");
+    io:println(" Car Rental System ");
     io:println("1. Admin");
     io:println("2. Customer");
     
