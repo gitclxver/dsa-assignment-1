@@ -144,7 +144,6 @@ public isolated class AssetRepository {
 
     // Add a Component
     public isolated function addComponent(string assetTag, models:Component component) returns models:Asset|error {
-
         models:Asset & readonly roAsset;
         lock {
             if !self.assets.hasKey(assetTag) {
@@ -173,6 +172,7 @@ public isolated class AssetRepository {
         return updatedAsset.clone();
     }
 
+
     // Remove a Component
     public isolated function removeComponent(string assetTag, string componentId) returns models:Asset|error {
         lock {
@@ -185,16 +185,20 @@ public isolated class AssetRepository {
                 return error(config:ASSET_NOT_FOUND);
             }
 
+            json|error componentsJson = a.components.toJson();
+            string componentsStr = componentsJson is error ? "null" : componentsJson.toJsonString();
+            log:printInfo("Current components: " + componentsStr);
+            
             models:Asset mutableAsset = helpers:createMutableAsset(a);
             models:Component[] components = mutableAsset.components ?: [];
             models:Component[] newComps = [];
             boolean removed = false;
             
             foreach models:Component c in components {
-                if c.componentId != componentId {
-                    newComps.push(c);
-                } else {
+                if c.componentId == componentId {
                     removed = true;
+                } else {
+                    newComps.push(c);
                 }
             }
             
@@ -211,7 +215,6 @@ public isolated class AssetRepository {
     
     // Add a Schedule
     public isolated function addSchedule(string assetTag, models:Schedule schedule) returns models:Asset|error {
-
         models:Asset & readonly roAsset;
         lock {
             if !self.assets.hasKey(assetTag) {
@@ -227,8 +230,7 @@ public isolated class AssetRepository {
         models:Asset mutableAsset = helpers:createMutableAsset(roAsset);
 
         models:Schedule[] oldSchedules = mutableAsset.schedules ?: [];
-        models:Schedule[] newSchedules = oldSchedules.clone();
-        newSchedules.push(schedule);
+        models:Schedule[] newSchedules = [...oldSchedules, schedule];
         mutableAsset.schedules = newSchedules;
 
         models:Asset & readonly updatedAsset;
@@ -239,6 +241,7 @@ public isolated class AssetRepository {
 
         return updatedAsset.clone();
     }
+
 
 
     // Remove a Schedule
@@ -255,14 +258,19 @@ public isolated class AssetRepository {
 
             models:Asset mutableAsset = helpers:createMutableAsset(a);
             models:Schedule[] schedules = mutableAsset.schedules ?: [];
+
+            if schedules.length() == 0 {
+                return error(config:SCHEDULE_NOT_FOUND);
+            }
+            
             models:Schedule[] newScheds = [];
             boolean removed = false;
             
             foreach models:Schedule s in schedules {
-                if s.scheduleId != scheduleId {
-                    newScheds.push(s);
-                } else {
+                if s.scheduleId == scheduleId {  
                     removed = true;
+                } else {
+                    newScheds.push(s);          
                 }
             }
             
@@ -547,7 +555,7 @@ public isolated class AssetRepository {
                     boolean removed = false;
                     
                     foreach models:Task t in tasks {
-                        if t.taskId != taskId {
+                        if t.taskId == taskId {
                             newTasks.push(t);
                         } else {
                             removed = true;
