@@ -2,8 +2,8 @@ import ballerina/io;
 import ballerina/grpc;
 
 // Import the actual generated files
-import car_rental_pb;              
-import carentalservice_client;    
+import 'client.client_stub;           
+import 'client.handlers;
 
 public function main() returns error? {
    
