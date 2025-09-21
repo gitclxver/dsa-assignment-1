@@ -1,186 +1,127 @@
 import ballerina/io;
-import ballerina/grpc;
+import 'client.handlers as handlers;
 
+const string SERVER_URL = "http://localhost:9090";
 
-import car_rental_pb;              
-
-public function main() returns error? {
-
-    carentalservice_client:CarRentalServiceClient client = check new("http://localhost:9090");
+// Customer UI Main Function
+public function customerMain() returns error? {
+    handlers:CustomerHandler customerHandler = check new (SERVER_URL);
     
-    io:println("Car Rental System - Customer");
-    io:println("=============================");
-    
-    // Get customer ID
-    io:print("Enter your customer ID: ");
-    string customerId = io:readln().trim();
-    
-    while (true) {
-        showCustomerMenu();
-        string choice = io:readln().trim();
+    while true {
+        io:println("\n CUSTOMER PORTAL ");
+        io:println("1. Browse Available Cars");
+        io:println("2. Search Car by License Plate");
+        io:println("3. Add Car to Cart");
+        io:println("4. Place Reservation");
+        io:println("5. Exit");
         
-        if (choice == "1") {
-            check listAvailableCars(client);
-        } else if (choice == "2") {
-            check searchCar(client);
-        } else if (choice == "3") {
-            check addToCart(client, customerId);
-        } else if (choice == "4") {
-            check placeReservation(client, customerId);
-        } else if (choice == "5") {
-            io:println("Thank you!");
-            break;
-        } else {
-            io:println("Invalid choice. Try again.");
+        string choice = io:readln("Select option: ").trim();
+        
+        match choice {
+            "1" => { check browseAvailableCarsUI(customerHandler); }
+            "2" => { check searchCarUI(customerHandler); }
+            "3" => { check addToCartUI(customerHandler); }
+            "4" => { check placeReservationUI(customerHandler); }
+            "5" => { 
+                io:println("Thank you for using Car Rental System!");
+                break;
+            }
+            _ => { io:println("Invalid option. Please try again."); }
         }
-        
-        io:println("");
-        io:print("Press Enter to continue...");
-        _ = io:readln();
     }
 }
 
-function showCustomerMenu() {
-    io:println("\n--- Customer Menu ---");
-    io:println("1. List available cars");
-    io:println("2. Search car by plate");
-    io:println("3. Add car to cart");
-    io:println("4. Place reservation");
-    io:println("5. Exit");
-    io:print("Choose option: ");
-}
+//CUSTOMER UI IMPLEMENTATIONS
 
-function listAvailableCars(carentalservice_client:CarRentalServiceClient client) returns error? {
-    io:println("\n--- Available Cars ---");
+function browseAvailableCarsUI(handlers:CustomerHandler customerHandler) returns error? {
+    io:println("\n Browse Available Cars ");
     
-    io:print("Filter (make/model/year, or press Enter for all): ");
-    string filter = io:readln().trim();
+    string filter = io:readln("Enter search filter (or press Enter for all): ").trim();
     
-    // Create request using generated types
-    car_rental_pb:ListAvailableCarsRequest request = {filter: filter};
-    
-    io:println("Getting available cars...\n");
-    
-    // Call the generated gRPC method
-    stream<car_rental_pb:Car, grpc:Error?> carStream = check client->list_available_cars(request);
-    
-    io:println("PLATE      MAKE         MODEL        YEAR   PRICE/DAY   MILEAGE    STATUS");
-    io:println("------------------------------------------------------------------------");
-    
-    check carStream.forEach(function(car_rental_pb:Car car) {
-        string status = car.status == car_rental_pb:AVAILABLE ? "AVAILABLE" : "UNAVAILABLE";
-        io:println(string `${car.plate:<10} ${car.make:<12} ${car.model:<12} ${car.year:<6} $${car.daily_price:<8.2f} ${car.mileage:<10} ${status}`);
-    });
-}
-
-function searchCar(carentalservice_client:CarRentalServiceClient client) returns error? {
-    io:println("\n--- Search Car ---");
-    
-    io:print("Enter car plate: ");
-    string plate = io:readln().trim();
-    
-    if (plate == "") {
-        io:println("Plate number required!");
-        return;
-    }
-    
-    // Create request using generated types
-    car_rental_pb:SearchCarRequest request = {plate: plate};
-    
-    // Call the generated gRPC method
-    car_rental_pb:Car|grpc:Error response = client->search_car(request);
-    
-    if (response is car_rental_pb:Car) {
-        io:println("\nCar found:");
-        io:println("Plate: " + response.plate);
-        io:println("Make: " + response.make);
-        io:println("Model: " + response.model);
-        io:println("Year: " + response.year.toString());
-        io:println("Daily Price: $" + response.daily_price.toString());
-        io:println("Mileage: " + response.mileage.toString());
-        
-        string status = response.status == car_rental_pb:AVAILABLE ? "AVAILABLE" : "UNAVAILABLE";
-        io:println("Status: " + status);
-        
-        if (response.status != car_rental_pb:AVAILABLE) {
-            io:println("Note: This car is currently not available for rental.");
-        }
+    handlers:CarDetails[]|error result = customerHandler.listAvailableCars(filter);
+    if result is error {
+        io:println("Error: " + result.message());
     } else {
-        io:println("Car not found or error occurred.");
-    }
-}
-
-function addToCart(carentalservice_client:CarRentalServiceClient client, string customerId) returns error? {
-    io:println("\n--- Add to Cart ---");
-    
-    io:print("Car plate: ");
-    string plate = io:readln().trim();
-    
-    io:print("Start date (YYYY-MM-DD): ");
-    string startDate = io:readln().trim();
-    
-    io:print("End date (YYYY-MM-DD): ");
-    string endDate = io:readln().trim();
-    
-    if (plate == "" || startDate == "" || endDate == "") {
-        io:println("All fields are required!");
-        return;
-    }
-    
-    // Create request using generated types (note: uses user_id not customer_id)
-    car_rental_pb:AddToCartRequest request = {
-        user_id: customerId,
-        car_plate: plate,
-        start_date: startDate,
-        end_date: endDate
-    };
-    
-    // Call the generated gRPC method
-    car_rental_pb:CartResponse|grpc:Error response = client->add_to_cart(request);
-    
-    if (response is car_rental_pb:CartResponse) {
-        if (response.success) {
-            io:println("✓ " + response.message);
+        if result.length() == 0 {
+            io:println("No available cars found.");
         } else {
-            io:println("✗ " + response.message);
+            io:println(string `Found ${result.length()} available car(s):`);
+            foreach handlers:CarDetails car in result {
+                printCarDetails(car);
+            }
         }
-    } else {
-        io:println("Error adding to cart.");
     }
 }
 
-function placeReservation(carentalservice_client:CarRentalServiceClient client, string customerId) returns error? {
-    io:println("\n--- Place Reservation ---");
-    io:println("Processing your cart...");
+function searchCarUI(handlers:CustomerHandler customerHandler) returns error? {
+    io:println("\n Search Car ");
     
-    // Create request using generated types
-    car_rental_pb:PlaceReservationRequest request = {user_id: customerId};
+    string plate = io:readln("Enter license plate: ").trim();
     
-    // Call the generated gRPC method
-    car_rental_pb:ReservationResponse|grpc:Error response = client->place_reservation(request);
+    handlers:CarDetails|error result = customerHandler.searchCar(plate);
+    if result is error {
+        io:println("Error: " + result.message());
+    } else {
+        io:println("Car found:");
+        printCarDetails(result);
+    }
+}
+
+function addToCartUI(handlers:CustomerHandler customerHandler) returns error? {
+    io:println("\n Add Car to Cart ");
     
-    if (response is car_rental_pb:ReservationResponse) {
-        if (response.success) {
-            io:println("✓ " + response.message);
-            
-            // Display reservation details using generated types
-            car_rental_pb:Reservation reservation = response.reservation;
-            io:println("\n--- Reservation Details ---");
-            io:println("Reservation ID: " + reservation.id);
-            io:println("Customer ID: " + reservation.user_id);
-            io:println("Total Price: $" + reservation.total_price.toString());
-            
-            io:println("\nItems:");
-            foreach car_rental_pb:CartItem item in reservation.items {
-                io:println("- Car: " + item.car_plate);
-                io:println("  Dates: " + item.start_date + " to " + item.end_date);
-                io:println("  Price: $" + item.price.toString());
-                io:println("");
+    string userId = io:readln("Enter your user ID: ").trim();
+    string carPlate = io:readln("Enter car license plate: ").trim();
+    
+    string daysStr = io:readln("Enter number of days to rent: ").trim();
+    int days = check int:fromString(daysStr);
+    
+    handlers:CartOperationResult|error result = customerHandler.addToCart(userId, carPlate, days);
+    if result is error {
+        io:println("Error: " + result.message());
+    } else {
+        if result.success {
+            io:println( result.message);
+        } else {
+            io:println(result.message);
+        }
+    }
+}
+
+function placeReservationUI(handlers:CustomerHandler customerHandler) returns error? {
+    io:println("\n Place Reservation ");
+    
+    string userId = io:readln("Enter your user ID: ").trim();
+    
+    handlers:ReservationResult|error result = customerHandler.placeReservation(userId);
+    if result is error {
+        io:println("Error: " + result.message());
+    } else {
+        if result.success {
+            io:println(result.message);
+            if result.reservation is handlers:ReservationDetails {
+                handlers:ReservationDetails reservation = <handlers:ReservationDetails>result.reservation;
+                printReservationDetails(reservation);
             }
         } else {
-            io:println("✗ " + response.message);
+            io:println(result.message);
         }
-    } else {
-        io:println("Error placing reservation.");
+    }
+}
+
+// UTILITY FUNCTIONS
+
+function printCarDetails(handlers:CarDetails car) {
+    io:println(string `  [${car.plate}] ${car.make} ${car.model} (${car.year}) - $${car.daily_price}/day - ${car.mileage} miles - ${car.status}`);
+}
+
+function printReservationDetails(handlers:ReservationDetails reservation) {
+    io:println(string `\n Reservation Details `);
+    io:println(string `Reservation ID: ${reservation.id}`);
+    io:println(string `User ID: ${reservation.user_id}`);
+    io:println(string `Total Price: $${reservation.total_price}`);
+    io:println("Items:");
+    foreach handlers:CartItemDetails item in reservation.items {
+        io:println(string `  - ${item.car_plate}: ${item.days_to_rent} days @ $${item.price}`);
     }
 }
