@@ -1,386 +1,350 @@
 import ballerina/time;
 import ballerina/log;
 
-import asset_management.models;
-import asset_management.config;
-import asset_management.helpers;
 
-public isolated class AssetRepository {
+public type Asset record {
+    string assetTag;
+    string name;
+    string faculty;
+    string department;
+    string status;
+    time:Date acquiredDate;
+    Component[] components?;
+    Schedule[] schedules?;
+    WorkOrder[] workOrders?;
+};
 
-    private final map<models:Asset & readonly> assets = {};
+public type Component record {
+    string componentId;
+    string name;
+    string description;
+    string serialNumber;
+    string status;
+};
 
-    public isolated function init() {
+public type ComponentRequest record {
+    string name;
+    string description;
+    string serialNumber;
+    string status;
+};
+
+public type Schedule record {
+    string scheduleId;
+    string scheduleType;
+    string frequency;
+    string nextDueDate;
+    string description;
+    string status;
+};
+
+public type ScheduleRequest record {
+    string scheduleType;
+    string frequency;
+    string nextDueDate;
+    string description;
+    string status;
+};
+
+public type Task record {
+    string taskId;
+    string description;
+    string status;
+    string assignedTo;
+    time:Date? dueDate;
+    time:Date? completedDate;
+};
+
+public type TaskRequest record {
+    string description;
+    string assignedTo;
+    time:Date? dueDate;
+};
+
+public type WorkOrder record {
+    string workOrderId;
+    string title;
+    string description;
+    string status;
+    time:Date openedDate;
+    time:Date? closedDate;
+    Task[] tasks?;
+};
+
+public type WorkOrderRequest record {
+    string title;
+    string description;
+    string status;
+};
+
+public const ASSET_NOT_FOUND = "AssetNotFound";
+public const ASSET_ALREADY_EXISTS = "AssetAlreadyExists";
+public const COMPONENT_NOT_FOUND = "ComponentNotFound";
+public const SCHEDULE_NOT_FOUND = "ScheduleNotFound";
+public const WORKORDER_NOT_FOUND = "WorkOrderNotFound";
+public const TASK_NOT_FOUND = "TaskNotFound";
+public const ASSET_TAG_MISMATCH = "AssetTagMismatch";
+
+public const SCHEDULE_ACTIVE = "ACTIVE";
+public const COMPLETED = "COMPLETED";
+
+public class AssetRepository {
+
+    private final map<Asset> assets = {};
+
+    public function init() {
     }
 
     // Create an Asset
-    public isolated function createAsset(models:Asset asset) returns models:Asset|error {
-        models:Asset & readonly readonlyAsset = asset.cloneReadOnly();
-        lock {
-            self.assets[asset.assetTag] = readonlyAsset;
+
+    public function createAsset(Asset asset) returns Asset|error{
+
+        if self.assets.hasKey(asset.assetTag) {
+            return error(ASSET_ALREADY_EXISTS);
         }
+        
+        self.assets[asset.assetTag] = asset.clone();
         log:printInfo("Asset created: " + asset.assetTag);
-        return readonlyAsset.clone();
+        return asset.clone();
     }
 
+
     // Get All Assets
-    public isolated function getAllAssets() returns models:Asset[]|error {
-
-        map<models:Asset & readonly> assetsCopy;
-        lock {
-            assetsCopy = self.assets.cloneReadOnly();
-        }
-
-        models:Asset[] result = [];
-        foreach var [_, asset] in assetsCopy.entries() {
+    public function getAllAssets() returns Asset[] {
+        Asset[] result = [];
+        foreach var [_, asset] in self.assets.entries() {
             result.push(asset.clone());
-            
         }
-
         return result;
     }
 
     // Get One Asset
-    public isolated function getAsset(string assetTag) returns models:Asset|error {
-        lock {
-            if !self.assets.hasKey(assetTag) {
-                return error(config:ASSET_NOT_FOUND);
-            }
-            models:Asset & readonly|() a = self.assets[assetTag];
-            if a is () {
-                return error(config:ASSET_NOT_FOUND);
-            }
-            return a.clone();
+    public function getAsset(string assetTag) returns Asset|error {
+        Asset? maybeAsset = self.assets[assetTag];
+        if maybeAsset is (){
+            return error(ASSET_NOT_FOUND);
         }
+
+        return maybeAsset.clone();
     }
 
     // Update an Asset
-    public isolated function updateAsset(string assetTag, models:Asset asset) returns models:Asset|error {
-        models:Asset & readonly readonlyAsset = asset.cloneReadOnly();
-        lock {
-            if !self.assets.hasKey(assetTag) {
-                return error(config:ASSET_NOT_FOUND);
-            }
-            self.assets[assetTag] = readonlyAsset;
+    public function updateAsset(string assetTag, Asset asset) returns Asset|error {
+        if !self.assets.hasKey(assetTag) {
+            return error(ASSET_NOT_FOUND);
         }
+        if assetTag != asset.assetTag {
+            return error(ASSET_TAG_MISMATCH);
+        }
+        
+        self.assets[assetTag] = asset.clone();
         log:printInfo("Asset updated: " + assetTag);
-        return readonlyAsset.clone();
+        return asset.clone();
     }
 
-    public isolated function deleteAsset(string assetTag) returns error? {
-        lock {
-            if !self.assets.hasKey(assetTag) {
-                return error(config:ASSET_NOT_FOUND);
-            }
-            _ = self.assets.remove(assetTag);
+    public function deleteAsset(string assetTag) returns error? {
+        if !self.assets.hasKey(assetTag) {
+            return error(ASSET_NOT_FOUND);
         }
+        _ = self.assets.remove(assetTag);
         log:printInfo("Asset deleted: " + assetTag);
-        return ();
+        return;
     }
 
     // Get an Asset By Specific Faculty
-    public isolated function getAssetsByFaculty(string faculty) returns models:Asset[]|error {
-
-        map<models:Asset & readonly> assetsCopy;
-        lock {
-            assetsCopy = self.assets.cloneReadOnly();
+    public function getAssetsByFaculty(string faculty) returns Asset[] {
+        Asset[] result = [];
+        foreach var [_, asset] in self.assets.entries() {
+            if asset.faculty == faculty {
+                result.push(asset.clone());
+            }
         }
-
-        models:Asset[] result = [];
-        foreach var [_, asset] in assetsCopy.entries() {
-            result.push(asset.clone());
-        }
-
         return result;
     }
 
     // Get Assets with Overdue Schedules
-    public isolated function getAssetsWithOverdueSchedules() returns models:Asset[]|error {
-        time:Utc nowUtc = time:utcNow();
-
-        map<models:Asset & readonly> assetsCopy;
-        lock {
-            assetsCopy = self.assets.cloneReadOnly();
-        }
-
-        models:Asset[] result = [];
-
-        foreach var [_, asset] in assetsCopy.entries() {
+    public function getAssetsWithOverdueSchedules() returns Asset[] {
         
-            models:Schedule[] schedules = asset.schedules ?: [];
-            boolean assetHasOverdue = false;
+    string currentUtcString = time:utcNow().toString();
+    string currentDateStr = currentUtcString.substring(0, 10);
 
-            foreach models:Schedule s in schedules {
-                if s.status != config:SCHEDULE_ACTIVE {
-                    continue;
-                }
+    Asset[] result = [];
 
-                time:Utc? dueUtc = ();
+    foreach var [_, asset] in self.assets.entries() {
+        Schedule[] schedules = asset.schedules ?: [];
+        boolean hasOverdue = false;
 
-                
-                time:Utc|error parsed = time:utcFromString(s.nextDueDate);
-                if parsed is time:Utc {
-                    dueUtc = parsed;
-                } else {
-                    continue;
-                }
-                
-
-                if dueUtc is time:Utc {
-                    time:Seconds diff = time:utcDiffSeconds(dueUtc, nowUtc);
-                    if diff < 0.0d {
-                        assetHasOverdue = true;
-                        break;
-                    }
-                }
+        foreach Schedule s in schedules {
+            if s.status == SCHEDULE_ACTIVE && s.nextDueDate < currentDateStr {
+                hasOverdue = true;
+                break;
             }
-
-            if assetHasOverdue {
-                result.push(asset.clone());
-                }
         }
 
-        return result;
+        if hasOverdue {
+            result.push(asset.clone());
+        }
     }
+    return result;
+}
 
     // Add a Component
-    public isolated function addComponent(string assetTag, models:Component component) returns models:Asset|error {
-        models:Asset & readonly roAsset;
-        lock {
-            if !self.assets.hasKey(assetTag) {
-                return error(config:ASSET_NOT_FOUND);
-            }
-            models:Asset & readonly|() maybeAsset = self.assets[assetTag];
-            if maybeAsset is () {
-                return error(config:ASSET_NOT_FOUND);
-            }
-            roAsset = maybeAsset;
+    public function addComponent(string assetTag, Component component) returns Asset|error {
+        Asset? maybeAsset = self.assets[assetTag];
+
+        if maybeAsset is () {
+            return error(ASSET_NOT_FOUND);
         }
 
-        models:Asset mutableAsset = helpers:createMutableAsset(roAsset);
+        Asset asset = maybeAsset.clone();
+        Component[] components = asset.components ?: [];
+        components.push(component);
+        asset.components = components;
 
-        models:Component[] oldComponents = mutableAsset.components ?: [];
-        models:Component[] newComponents = oldComponents.clone();
-        newComponents.push(component);
-        mutableAsset.components = newComponents;
-
-        models:Asset & readonly updatedAsset;
-        lock {
-            updatedAsset = mutableAsset.cloneReadOnly();
-            self.assets[assetTag] = updatedAsset;
-        }
-
-        return updatedAsset.clone();
+        self.assets[assetTag] = asset;
+        return asset.clone();
     }
 
 
     // Remove a Component
-    public isolated function removeComponent(string assetTag, string componentId) returns models:Asset|error {
-        lock {
-            if !self.assets.hasKey(assetTag) {
-                return error(config:ASSET_NOT_FOUND);
-            }
-            
-            models:Asset & readonly|() a = self.assets[assetTag];
-            if a is () {
-                return error(config:ASSET_NOT_FOUND);
-            }
+    public function removeComponent(string assetTag, string componentId) returns Asset|error {
+        Asset? maybeAsset = self.assets[assetTag];
 
-            json|error componentsJson = a.components.toJson();
-            string componentsStr = componentsJson is error ? "null" : componentsJson.toJsonString();
-            log:printInfo("Current components: " + componentsStr);
-            
-            models:Asset mutableAsset = helpers:createMutableAsset(a);
-            models:Component[] components = mutableAsset.components ?: [];
-            models:Component[] newComps = [];
-            boolean removed = false;
-            
-            foreach models:Component c in components {
-                if c.componentId == componentId {
-                    removed = true;
-                } else {
-                    newComps.push(c);
-                }
-            }
-            
-            if !removed {
-                return error(config:COMPONENT_NOT_FOUND);
-            }
-            
-            mutableAsset.components = newComps;
-            models:Asset & readonly updatedAsset = mutableAsset.cloneReadOnly();
-            self.assets[assetTag] = updatedAsset;
-            return updatedAsset.clone();
+        if maybeAsset is () {
+            return error(ASSET_NOT_FOUND);
         }
+
+        Asset asset = maybeAsset.clone();
+        Component[] components = asset.components ?: [];
+        
+        Component[] newComponents = components.filter(component => component.componentId != componentId);
+        
+        if newComponents.length() == components.length() {
+            return error(COMPONENT_NOT_FOUND);
+        }
+
+        asset.components = newComponents;
+        self.assets[assetTag] = asset;
+        return asset.clone();
     }
     
     // Add a Schedule
-    public isolated function addSchedule(string assetTag, models:Schedule schedule) returns models:Asset|error {
-        models:Asset & readonly roAsset;
-        lock {
-            if !self.assets.hasKey(assetTag) {
-                return error(config:ASSET_NOT_FOUND);
-            }
-            models:Asset & readonly|() maybeAsset = self.assets[assetTag];
-            if maybeAsset is () {
-                return error(config:ASSET_NOT_FOUND);
-            }
-            roAsset = maybeAsset;
+    public function addSchedule(string assetTag, Schedule schedule) returns Asset|error {
+        
+        Asset? maybeAsset = self.assets[assetTag];
+        if maybeAsset is () {
+            return error(ASSET_NOT_FOUND);
         }
 
-        models:Asset mutableAsset = helpers:createMutableAsset(roAsset);
+        Asset asset = maybeAsset.clone();
+        Schedule[] schedules = asset.schedules ?: [];
+        schedules.push(schedule);
+        asset.schedules = schedules;
 
-        models:Schedule[] oldSchedules = mutableAsset.schedules ?: [];
-        models:Schedule[] newSchedules = [...oldSchedules, schedule];
-        mutableAsset.schedules = newSchedules;
-
-        models:Asset & readonly updatedAsset;
-        lock {
-            updatedAsset = mutableAsset.cloneReadOnly();
-            self.assets[assetTag] = updatedAsset;
-        }
-
-        return updatedAsset.clone();
+        self.assets[assetTag] = asset;
+        return asset.clone();
     }
 
 
 
     // Remove a Schedule
-    public isolated function removeSchedule(string assetTag, string scheduleId) returns models:Asset|error {
-        lock {
-            if !self.assets.hasKey(assetTag) {
-                return error(config:ASSET_NOT_FOUND);
-            }
-            
-            models:Asset & readonly|() a = self.assets[assetTag];
-            if a is () {
-                return error(config:ASSET_NOT_FOUND);
-            }
+    public function removeSchedule(string assetTag, string scheduleId) returns Asset|error {
+        
+        Asset? maybeAsset = self.assets[assetTag];
 
-            models:Asset mutableAsset = helpers:createMutableAsset(a);
-            models:Schedule[] schedules = mutableAsset.schedules ?: [];
-
-            if schedules.length() == 0 {
-                return error(config:SCHEDULE_NOT_FOUND);
-            }
-            
-            models:Schedule[] newScheds = [];
-            boolean removed = false;
-            
-            foreach models:Schedule s in schedules {
-                if s.scheduleId == scheduleId {  
-                    removed = true;
-                } else {
-                    newScheds.push(s);          
-                }
-            }
-            
-            if !removed {
-                return error(config:SCHEDULE_NOT_FOUND);
-            }
-            
-            mutableAsset.schedules = newScheds;
-            models:Asset & readonly updatedAsset = mutableAsset.cloneReadOnly();
-            self.assets[assetTag] = updatedAsset;
-            return updatedAsset.clone();
+        if maybeAsset is () {
+            return error(ASSET_NOT_FOUND);
         }
+
+        Asset asset = maybeAsset.clone();
+        Schedule[] schedules = asset.schedules ?: [];
+        
+        Schedule[] newSchedules = schedules.filter(schedule => schedule.scheduleId != scheduleId);
+        
+        if newSchedules.length() == schedules.length() {
+            return error(SCHEDULE_NOT_FOUND);
+        }
+
+        asset.schedules = newSchedules;
+        self.assets[assetTag] = asset;
+        return asset.clone();
     }
 
 
     // Complete a Schedule
-    public isolated function completeSchedule(string assetTag, string scheduleId) returns models:Asset|error {
-        lock {
-            if !self.assets.hasKey(assetTag) {
-                return error(config:ASSET_NOT_FOUND);
-            }
-            
-            models:Asset & readonly|() a = self.assets[assetTag];
-            if a is () {
-                return error(config:ASSET_NOT_FOUND);
-            }
+    public function completeSchedule(string assetTag, string scheduleId) returns Asset|error {
+        
+        Asset? maybeAsset = self.assets[assetTag];
 
-            models:Asset mutableAsset = helpers:createMutableAsset(a);
-            models:Schedule[] schedules = mutableAsset.schedules ?: [];
-            boolean updated = false;
-            models:Schedule[] newScheds = [];
-            
-            foreach models:Schedule s in schedules {
-                models:Schedule mutableSchedule = {
-                    scheduleId: s.scheduleId,
-                    scheduleType: s.scheduleType,
-                    frequency: s.frequency,
-                    nextDueDate: s.nextDueDate,
-                    description: s.description,
-                    status: s.scheduleId == scheduleId ? config:COMPLETED : s.status
-                };
-                
-                if s.scheduleId == scheduleId {
-                    updated = true;
-                }
-                newScheds.push(mutableSchedule);
-            }
-            
-            if !updated {
-                return error(config:SCHEDULE_NOT_FOUND);
-            }
-            
-            mutableAsset.schedules = newScheds;
-            models:Asset & readonly updatedAsset = mutableAsset.cloneReadOnly();
-            self.assets[assetTag] = updatedAsset;
-            return updatedAsset.clone();
+        if maybeAsset is () {
+            return error(ASSET_NOT_FOUND);
         }
+
+        Asset asset = maybeAsset.clone();
+        Schedule[] schedules = asset.schedules ?: [];
+        
+        boolean found = false;
+        Schedule[] newSchedules = [];
+        
+        foreach var schedule in schedules {
+            if schedule.scheduleId == scheduleId {
+                newSchedules.push({
+                    scheduleId: schedule.scheduleId,
+                    scheduleType: schedule.scheduleType,
+                    frequency: schedule.frequency,
+                    nextDueDate: schedule.nextDueDate,
+                    description: schedule.description,
+                    status: COMPLETED
+                });
+                found = true;
+            } else {
+                newSchedules.push(schedule);
+            }
+        }
+
+        if !found {
+            return error(SCHEDULE_NOT_FOUND);
+        }
+
+        asset.schedules = newSchedules;
+        self.assets[assetTag] = asset;
+        return asset.clone();
     }
 
     // Add a Work Order
-    public isolated function addWorkOrder(string assetTag, models:WorkOrder workOrder) returns models:Asset|error {
-        models:Asset & readonly roAsset;
-        lock {
-            if !self.assets.hasKey(assetTag) {
-                return error(config:ASSET_NOT_FOUND);
-            }
-            models:Asset & readonly|() maybeAsset = self.assets[assetTag];
-            if maybeAsset is () {
-                return error(config:ASSET_NOT_FOUND);
-            }
-            roAsset = maybeAsset;
+    public function addWorkOrder(string assetTag, WorkOrder workOrder) returns Asset|error {
+        
+        Asset? maybeAsset = self.assets[assetTag];
+
+        if maybeAsset is () {
+            return error(ASSET_NOT_FOUND);
         }
 
-        models:Asset mutableAsset = helpers:createMutableAsset(roAsset);
+        Asset asset = maybeAsset.clone();
+        WorkOrder[] workOrders = asset.workOrders ?: [];
+        workOrders.push(workOrder);
+        asset.workOrders = workOrders;
 
-        models:WorkOrder[] oldWorkOrders = mutableAsset.workOrders ?: [];
-        models:WorkOrder[] newWorkOrders = oldWorkOrders.clone();
-        newWorkOrders.push(workOrder);
-        mutableAsset.workOrders = newWorkOrders;
-
-        models:Asset & readonly updatedAsset;
-        lock {
-            updatedAsset = mutableAsset.cloneReadOnly();
-            self.assets[assetTag] = updatedAsset;
-        }
-
-        return updatedAsset.clone();
+        self.assets[assetTag] = asset;
+        return asset.clone();
     }
 
     // Update a Work Order
-    public isolated function updateWorkOrder(string assetTag, string workOrderId, models:WorkOrder workOrder) returns models:Asset|error {
-        models:Asset & readonly roAsset;
-        lock {
-            if !self.assets.hasKey(assetTag) {
-                return error(config:ASSET_NOT_FOUND);
-            }
-            models:Asset & readonly|() maybeAsset = self.assets[assetTag];
-            if maybeAsset is () {
-                return error(config:ASSET_NOT_FOUND);
-            }
-            roAsset = maybeAsset;
+    public function updateWorkOrder(string assetTag, string workOrderId, WorkOrder workOrder) returns Asset|error {
+        
+        Asset? maybeAsset = self.assets[assetTag];
+        
+        if maybeAsset is () {
+            return error(ASSET_NOT_FOUND);
         }
 
-        models:Asset mutableAsset = helpers:createMutableAsset(roAsset);
-
-        models:WorkOrder[] oldWorkOrders = mutableAsset.workOrders ?: [];
-        models:WorkOrder[] newWorkOrders = [];
+        Asset asset = maybeAsset.clone();
+        WorkOrder[] workOrders = asset.workOrders ?: [];
+        
         boolean found = false;
-
-        foreach models:WorkOrder wo in oldWorkOrders {
+        WorkOrder[] newWorkOrders = [];
+        
+        foreach var wo in workOrders {
             if wo.workOrderId == workOrderId {
                 newWorkOrders.push(workOrder);
                 found = true;
@@ -390,271 +354,211 @@ public isolated class AssetRepository {
         }
 
         if !found {
-            return error(config:WORKORDER_NOT_FOUND);
+            return error(WORKORDER_NOT_FOUND);
         }
 
-        mutableAsset.workOrders = newWorkOrders;
-
-        models:Asset & readonly updatedAsset;
-        lock {
-            updatedAsset = mutableAsset.cloneReadOnly();
-            self.assets[assetTag] = updatedAsset;
-        }
-
-        return updatedAsset.clone();
+        asset.workOrders = newWorkOrders;
+        self.assets[assetTag] = asset;
+        return asset.clone();
     }
 
     //Complete a Work Order
-    public isolated function completeWorkOrder(string assetTag, string workOrderId) returns models:Asset|error {
-        lock {
-            if !self.assets.hasKey(assetTag) {
-                return error(config:ASSET_NOT_FOUND);
-            }
-            
-            models:Asset & readonly|() a = self.assets[assetTag];
-            if a is () {
-                return error(config:ASSET_NOT_FOUND);
-            }
+    public function completeWorkOrder(string assetTag, string workOrderId) returns Asset|error {
+        
+        Asset? maybeAsset = self.assets[assetTag];
+        
+        if maybeAsset is () {
+            return error(ASSET_NOT_FOUND);
+        }
 
-            models:Asset mutableAsset = helpers:createMutableAsset(a);
-            models:WorkOrder[] workOrders = mutableAsset.workOrders ?: [];
-            boolean updated = false;
-            models:WorkOrder[] newWos = [];
-            
-            foreach models:WorkOrder wo in workOrders {
-                models:Task[]? clonedTasks = ();
-                if wo.tasks is models:Task[] {
-                    clonedTasks = wo.tasks.clone();
-                }
-
-                models:WorkOrder mutableWo = {
+        Asset asset = maybeAsset.clone();
+        WorkOrder[] workOrders = asset.workOrders ?: [];
+        
+        boolean found = false;
+        WorkOrder[] newWorkOrders = [];
+        
+        foreach var wo in workOrders {
+            if wo.workOrderId == workOrderId {
+                newWorkOrders.push({
                     workOrderId: wo.workOrderId,
                     title: wo.title,
                     description: wo.description,
-                    status: wo.workOrderId == workOrderId ? config:COMPLETED : wo.status,
+                    status: COMPLETED,
                     openedDate: wo.openedDate,
                     closedDate: wo.closedDate,
-                    tasks: clonedTasks
-                };
-                
-                if wo.workOrderId == workOrderId {
-                    updated = true;
-                }
-                newWos.push(mutableWo);
-            }
-            
-            if !updated {
-                return error(config:WORKORDER_NOT_FOUND);
-            }
-            
-            mutableAsset.workOrders = newWos;
-            models:Asset & readonly updatedAsset = mutableAsset.cloneReadOnly();
-            self.assets[assetTag] = updatedAsset;
-            return updatedAsset.clone();
-        }
-    }
-
-    // Create a Task
-    public isolated function addTask(string assetTag, string workOrderId, models:Task task) returns models:Asset|error {
-        models:Asset & readonly roAsset;
-        lock {
-            if !self.assets.hasKey(assetTag) {
-                return error(config:ASSET_NOT_FOUND);
-            }
-            models:Asset & readonly|() maybeAsset = self.assets[assetTag];
-            if maybeAsset is () {
-                return error(config:ASSET_NOT_FOUND);
-            }
-            roAsset = maybeAsset;
-        }
-
-        models:Asset mutableAsset = helpers:createMutableAsset(roAsset);
-
-        models:WorkOrder[] oldWorkOrders = mutableAsset.workOrders ?: [];
-        models:WorkOrder[] newWorkOrders = [];
-        boolean found = false;
-
-        foreach models:WorkOrder wo in oldWorkOrders {
-            models:Task[]? clonedTasks = ();
-            if wo.tasks is models:Task[] {
-                clonedTasks = wo.tasks.clone();
-            }
-            
-            models:WorkOrder mutableWo = {
-                workOrderId: wo.workOrderId,
-                title: wo.title,
-                description: wo.description,
-                status: wo.status,
-                openedDate: wo.openedDate,
-                closedDate: wo.closedDate,
-                tasks: clonedTasks
-            };
-            
-            if wo.workOrderId == workOrderId {
-                models:Task[] oldTasks = mutableWo.tasks ?: [];
-                models:Task[] newTasks = oldTasks.clone();
-                newTasks.push(task);
-                mutableWo.tasks = newTasks;
+                    tasks: wo.tasks
+                });
                 found = true;
+            } else {
+                newWorkOrders.push(wo);
             }
-            newWorkOrders.push(mutableWo);
         }
 
         if !found {
-            return error(config:WORKORDER_NOT_FOUND);
+            return error(WORKORDER_NOT_FOUND);
         }
 
-        mutableAsset.workOrders = newWorkOrders;
+        asset.workOrders = newWorkOrders;
+        self.assets[assetTag] = asset;
+        return asset.clone();
+    }
 
-        models:Asset & readonly updatedAsset;
-        lock {
-            updatedAsset = mutableAsset.cloneReadOnly();
-            self.assets[assetTag] = updatedAsset;
+    // Create a Task
+    public function addTask(string assetTag, string workOrderId, Task task) returns Asset|error {
+        
+        Asset? maybeAsset = self.assets[assetTag];
+        
+        if maybeAsset is () {
+            return error(ASSET_NOT_FOUND);
         }
 
-        return updatedAsset.clone();
+        Asset asset = maybeAsset.clone();
+        WorkOrder[] workOrders = asset.workOrders ?: [];
+        
+        boolean found = false;
+        WorkOrder[] newWorkOrders = [];
+        
+        foreach var wo in workOrders {
+            if wo.workOrderId == workOrderId {
+                Task[] tasks = wo.tasks ?: [];
+                tasks.push(task);
+                newWorkOrders.push({
+                    workOrderId: wo.workOrderId,
+                    title: wo.title,
+                    description: wo.description,
+                    status: wo.status,
+                    openedDate: wo.openedDate,
+                    closedDate: wo.closedDate,
+                    tasks: tasks
+                });
+                found = true;
+            } else {
+                newWorkOrders.push(wo);
+            }
+        }
+
+        if !found {
+            return error(WORKORDER_NOT_FOUND);
+        }
+
+        asset.workOrders = newWorkOrders;
+        self.assets[assetTag] = asset;
+        return asset.clone();
     }
 
     // Remove a Task
-    public isolated function removeTask(string assetTag, string workOrderId, string taskId) returns models:Asset|error {
-        lock {
-            if !self.assets.hasKey(assetTag) {
-                return error(config:ASSET_NOT_FOUND);
-            }
-            
-            models:Asset & readonly|() a = self.assets[assetTag];
-            if a is () {
-                return error(config:ASSET_NOT_FOUND);
-            }
+    public function removeTask(string assetTag, string workOrderId, string taskId) returns Asset|error {
+        
+        Asset? maybeAsset = self.assets[assetTag];
+        
+        if maybeAsset is () {
+            return error(ASSET_NOT_FOUND);
+        }
 
-            models:Asset mutableAsset = helpers:createMutableAsset(a);
-            models:WorkOrder[] workOrders = mutableAsset.workOrders ?: [];
-            boolean updatedWo = false;
-            models:WorkOrder[] newWos = [];
-            
-            foreach models:WorkOrder wo in workOrders {
-
-                models:Task[]? clonedTasks = ();
-                if wo.tasks is models:Task[] {
-                    clonedTasks = wo.tasks.clone();
+        Asset asset = maybeAsset.clone();
+        WorkOrder[] workOrders = asset.workOrders ?: [];
+        
+        boolean foundWo = false;
+        boolean foundTask = false;
+        WorkOrder[] newWorkOrders = [];
+        
+        foreach var wo in workOrders {
+            if wo.workOrderId == workOrderId {
+                foundWo = true;
+                Task[] tasks = wo.tasks ?: [];
+                Task[] newTasks = tasks.filter(task => task.taskId != taskId);
+                
+                if newTasks.length() < tasks.length() {
+                    foundTask = true;
                 }
                 
-                models:WorkOrder mutableWo = {
+                newWorkOrders.push({
                     workOrderId: wo.workOrderId,
                     title: wo.title,
                     description: wo.description,
                     status: wo.status,
                     openedDate: wo.openedDate,
                     closedDate: wo.closedDate,
-                    tasks: clonedTasks
-                };
-                
-                if wo.workOrderId == workOrderId {
-                    models:Task[] tasks = mutableWo.tasks ?: [];
-                    models:Task[] newTasks = [];
-                    boolean removed = false;
-                    
-                    foreach models:Task t in tasks {
-                        if t.taskId == taskId {
-                            newTasks.push(t);
-                        } else {
-                            removed = true;
-                        }
-                    }
-                    
-                    if !removed {
-                        return error(config:TASK_NOT_FOUND);
-                    }
-                    
-                    mutableWo.tasks = newTasks;
-                    updatedWo = true;
-                }
-                newWos.push(mutableWo);
+                    tasks: newTasks
+                    });
+            } else {
+                newWorkOrders.push(wo);
             }
-            
-            if !updatedWo {
-                return error(config:WORKORDER_NOT_FOUND);
-            }
-            
-            mutableAsset.workOrders = newWos;
-            models:Asset & readonly updatedAsset = mutableAsset.cloneReadOnly();
-            self.assets[assetTag] = updatedAsset;
-            return updatedAsset.clone();
         }
+
+        if !foundWo {
+            return error(WORKORDER_NOT_FOUND);
+        }
+        if !foundTask {
+            return error(TASK_NOT_FOUND);
+        }
+
+        asset.workOrders = newWorkOrders;
+        self.assets[assetTag] = asset;
+        return asset.clone();
     }
 
     // Complete a Task
-    public isolated function completeTask(string assetTag, string workOrderId, string taskId) returns models:Asset|error {
-        lock {
-            if !self.assets.hasKey(assetTag) {
-                return error(config:ASSET_NOT_FOUND);
-            }
-            
-            models:Asset & readonly|() a = self.assets[assetTag];
-            if a is () {
-                return error(config:ASSET_NOT_FOUND);
-            }
+    public function completeTask(string assetTag, string workOrderId, string taskId) returns Asset|error {
+        
+        Asset? maybeAsset = self.assets[assetTag];
+        
+        if maybeAsset is () {
+            return error(ASSET_NOT_FOUND);
+        }
 
-            models:Asset mutableAsset = helpers:createMutableAsset(a);
-            models:WorkOrder[] workOrders = mutableAsset.workOrders ?: [];
-            boolean updated = false;
-            models:WorkOrder[] newWos = [];
-            
-            foreach models:WorkOrder wo in workOrders {
-                models:Task[]? clonedTasks = ();
-                if wo.tasks is models:Task[] {
-                    clonedTasks = wo.tasks.clone();
+        Asset asset = maybeAsset.clone();
+        WorkOrder[] workOrders = asset.workOrders ?: [];
+        
+        boolean foundWo = false;
+        boolean foundTask = false;
+        WorkOrder[] newWorkOrders = [];
+        
+        foreach var wo in workOrders {
+            if wo.workOrderId == workOrderId {
+                foundWo = true;
+                Task[] tasks = wo.tasks ?: [];
+                Task[] newTasks = [];
+                
+                foreach var task in tasks {
+                    if task.taskId == taskId {
+                        newTasks.push({
+                            taskId: task.taskId,
+                            description: task.description,
+                            status: COMPLETED,
+                            assignedTo: task.assignedTo,
+                            dueDate: task.dueDate,
+                            completedDate: task.completedDate
+                        });
+                        foundTask = true;
+                    } else {
+                        newTasks.push(task);
+                        }
                 }
                 
-                models:WorkOrder mutableWo = {
+                newWorkOrders.push({
                     workOrderId: wo.workOrderId,
                     title: wo.title,
                     description: wo.description,
                     status: wo.status,
                     openedDate: wo.openedDate,
                     closedDate: wo.closedDate,
-                    tasks: clonedTasks
-                };
-                
-                if wo.workOrderId == workOrderId {
-                    models:Task[] tasks = mutableWo.tasks ?: [];
-                    models:Task[] newTasks = [];
-                    boolean foundTask = false;
-                    
-                    foreach models:Task t in tasks {
-                        models:Task mutableTask = {
-                            taskId: t.taskId,
-                            description: t.description,
-                            status: t.taskId == taskId ? config:COMPLETED : t.status,
-                            assignedTo: t.assignedTo,
-                            dueDate: t.dueDate,
-                            completedDate: t.completedDate
-                        };
-                        
-                        if t.taskId == taskId {
-                            foundTask = true;
-                        }
-                        newTasks.push(mutableTask);
-                    }
-                    
-                    if !foundTask {
-                        return error(config:TASK_NOT_FOUND);
-                    }
-                    
-                    mutableWo.tasks = newTasks;
-                    updated = true;
-                }
-                newWos.push(mutableWo);
+                    tasks: newTasks
+                });
+            } else {
+                newWorkOrders.push(wo);
             }
-            
-            if !updated {
-                return error(config:WORKORDER_NOT_FOUND);
-            }
-            
-            mutableAsset.workOrders = newWos;
-            models:Asset & readonly updatedAsset = mutableAsset.cloneReadOnly();
-            self.assets[assetTag] = updatedAsset;
-            return updatedAsset.clone();
         }
+
+        if !foundWo {
+            return error(WORKORDER_NOT_FOUND);
+        }
+        if !foundTask {
+            return error(TASK_NOT_FOUND);
+        }
+
+        asset.workOrders = newWorkOrders;
+        self.assets[assetTag] = asset;
+        return asset.clone();
     }
 }

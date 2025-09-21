@@ -47,7 +47,7 @@ public function main() returns error? {
         io:println("Component removal failed: " + result.message());
     }
     
-    result = removeSchedule("LAP-001", "SCHED-001");
+    result = removeSchedule("LAP-001", "SCHED-OVERDUE");
     if (result is error) {
         io:println("Schedule removal failed: " + result.message());
     }

@@ -2,13 +2,12 @@ import ballerina/http;
 import ballerina/log;
 
 import asset_management.db;
-import asset_management.models;
 
 // HTTP listener
 listener http:Listener httpListener = new(8081);
 
 // Helper function to initialize repository
-isolated function getAssetRepository() returns db:AssetRepository|error {
+function getAssetRepository() returns db:AssetRepository|error {
     return new;
 }
 
@@ -18,12 +17,12 @@ final db:AssetRepository repo = check getAssetRepository();
 service /api on httpListener {
 
     // Create a new asset
-    isolated resource function post assets(http:Caller caller, http:Request req) returns error? {
+    resource function post assets(http:Caller caller, http:Request req) returns error? {
         log:printInfo("POST /api/assets - Creating new asset");
 
         json payload = check req.getJsonPayload();
-        models:Asset asset = check payload.cloneWithType();
-        models:Asset created = check repo.createAsset(asset);
+        db:Asset asset = check payload.cloneWithType();
+        db:Asset created = check repo.createAsset(asset);
 
         json response = {
             "message": "Asset created successfully",
@@ -34,21 +33,21 @@ service /api on httpListener {
     }
 
     // Get all assets
-    isolated resource function get assets(http:Caller caller, http:Request req) returns error? {
+    resource function get assets(http:Caller caller, http:Request req) returns error? {
         log:printInfo("GET /api/assets - Fetching all assets");
 
-        models:Asset[] assets = check repo.getAllAssets();
-        json[] assetJsonArray = from models:Asset asset in assets
+        db:Asset[] assets = repo.getAllAssets();
+        json[] assetJsonArray = from db:Asset asset in assets
                                select asset.toJson();
 
         check caller->respond(assetJsonArray);
     }
 
     // Get a Specific Asset by Tag
-    isolated resource function get assets/[string assetTag](http:Caller caller, http:Request req) returns error? {
+    resource function get assets/[string assetTag](http:Caller caller, http:Request req) returns error? {
         log:printInfo("GET /api/assets/" + assetTag + " - Fetching specific asset");
 
-        models:Asset|error assetResult = repo.getAsset(assetTag);
+        db:Asset|error assetResult = repo.getAsset(assetTag);
 
         if assetResult is error {
             json errorResponse = {
@@ -63,12 +62,12 @@ service /api on httpListener {
     }
 
     // Update Asset
-    isolated resource function put assets/[string assetTag](http:Caller caller, http:Request req) returns error? {
+    resource function put assets/[string assetTag](http:Caller caller, http:Request req) returns error? {
         log:printInfo("PUT /api/assets/" + assetTag + " - Updating asset");
 
         json payload = check req.getJsonPayload();
-        models:Asset asset = check payload.cloneWithType();
-        models:Asset|error updated = repo.updateAsset(assetTag, asset);
+        db:Asset asset = check payload.cloneWithType();
+        db:Asset|error updated = repo.updateAsset(assetTag, asset);
 
         if updated is error {
             json errorResponse = {
@@ -88,7 +87,7 @@ service /api on httpListener {
     }
 
     // Delete Asset
-    isolated resource function delete assets/[string assetTag](http:Caller caller, http:Request req) returns error? {
+    resource function delete assets/[string assetTag](http:Caller caller, http:Request req) returns error? {
 
         log:printInfo("DELETE /api/assets/" + assetTag + " - Deleting asset");
 
@@ -116,22 +115,22 @@ service /api on httpListener {
     }
 
     // Get Assets by Faculty
-    isolated resource function get assets/faculty/[string faculty](http:Caller caller, http:Request req) returns error? {
+    resource function get assets/faculty/[string faculty](http:Caller caller, http:Request req) returns error? {
         log:printInfo("GET /api/assets/faculty/" + faculty + " - Fetching assets by faculty");
 
-        models:Asset[] assets = check repo.getAssetsByFaculty(faculty);
-        json[] assetJsonArray = from models:Asset asset in assets
+        db:Asset[] assets = repo.getAssetsByFaculty(faculty);
+        json[] assetJsonArray = from db:Asset asset in assets
                                select asset.toJson();
 
         check caller->respond(assetJsonArray);
     }
 
     // Get Overdue Assets
-    isolated resource function get assets/overdue(http:Caller caller, http:Request req) returns error? {
+    resource function get assets/overdue(http:Caller caller, http:Request req) returns error? {
         log:printInfo("GET /api/assets/overdue - Fetching overdue assets");
 
-        models:Asset[] assets = check repo.getAssetsWithOverdueSchedules();
-        json[] assetJsonArray = from models:Asset asset in assets
+        db:Asset[] assets = repo.getAssetsWithOverdueSchedules();
+        json[] assetJsonArray = from db:Asset asset in assets
                                select asset.toJson();
 
         check caller->respond(assetJsonArray);
@@ -140,12 +139,12 @@ service /api on httpListener {
     // Components
 
     // Add Components
-    isolated resource function post assets/[string assetTag]/components(http:Caller caller, http:Request req) returns error? {
+    resource function post assets/[string assetTag]/components(http:Caller caller, http:Request req) returns error? {
         log:printInfo("POST /api/assets/" + assetTag + "/components - Adding component");
 
         json payload = check req.getJsonPayload();
-        models:Component component = check payload.cloneWithType();
-        models:Asset updated = check repo.addComponent(assetTag, component);
+        db:Component component = check payload.cloneWithType();
+        db:Asset updated = check repo.addComponent(assetTag, component);
 
         json response = {
             "message": "Component added successfully",
@@ -156,11 +155,11 @@ service /api on httpListener {
     }
 
     // Delete Components
-    isolated resource function delete assets/[string assetTag]/components/[string componentId](http:Caller caller, http:Request req) returns error? {
+    resource function delete assets/[string assetTag]/components/[string componentId](http:Caller caller, http:Request req) returns error? {
 
         log:printInfo("DELETE /api/assets/" + assetTag + "/components/" + componentId + " - Removing component");
 
-        models:Asset|error result = repo.removeComponent(assetTag, componentId);
+        db:Asset|error result = repo.removeComponent(assetTag, componentId);
 
         http:Response res = new;
         if result is error {
@@ -187,12 +186,12 @@ service /api on httpListener {
     // Schedules
 
     // Add Schedule
-    isolated resource function post assets/[string assetTag]/schedules(http:Caller caller, http:Request req) returns error? {
+    resource function post assets/[string assetTag]/schedules(http:Caller caller, http:Request req) returns error? {
         log:printInfo("POST /api/assets/" + assetTag + "/schedules - Adding schedule");
 
         json payload = check req.getJsonPayload();
-        models:Schedule schedule = check payload.cloneWithType();
-        models:Asset updated = check repo.addSchedule(assetTag, schedule);
+        db:Schedule schedule = check payload.cloneWithType();
+        db:Asset updated = check repo.addSchedule(assetTag, schedule);
 
         json response = {
             "message": "Schedule added successfully",
@@ -203,10 +202,10 @@ service /api on httpListener {
     }
 
     // Complete Schedule
-    isolated resource function put assets/[string assetTag]/schedules/[string scheduleId]/complete(http:Caller caller, http:Request req) returns error? {
+    resource function put assets/[string assetTag]/schedules/[string scheduleId]/complete(http:Caller caller, http:Request req) returns error? {
         log:printInfo("PUT /api/assets/" + assetTag + "/schedules/" + scheduleId + "/complete - Completing schedule");
 
-        models:Asset updated = check repo.completeSchedule(assetTag, scheduleId);
+        db:Asset updated = check repo.completeSchedule(assetTag, scheduleId);
 
         json response = {
             "message": "Schedule completed successfully",
@@ -217,11 +216,11 @@ service /api on httpListener {
     }
 
     // Remove Schedule
-    isolated resource function delete assets/[string assetTag]/schedules/[string scheduleId](http:Caller caller, http:Request req) returns error? {
+    resource function delete assets/[string assetTag]/schedules/[string scheduleId](http:Caller caller, http:Request req) returns error? {
 
         log:printInfo("DELETE /api/assets/" + assetTag + "/schedules/" + scheduleId + " - Removing schedule");
 
-        models:Asset|error result = repo.removeSchedule(assetTag, scheduleId);
+        db:Asset|error result = repo.removeSchedule(assetTag, scheduleId);
 
         http:Response res = new;
         if result is error {
@@ -248,12 +247,12 @@ service /api on httpListener {
     //  Work Orders 
 
     // Add Work Order
-    isolated resource function post assets/[string assetTag]/workorders(http:Caller caller, http:Request req) returns error? {
+    resource function post assets/[string assetTag]/workorders(http:Caller caller, http:Request req) returns error? {
         log:printInfo("POST /api/assets/" + assetTag + "/workorders - Adding work order");
 
         json payload = check req.getJsonPayload();
-        models:WorkOrder workOrder = check payload.cloneWithType();
-        models:Asset updated = check repo.addWorkOrder(assetTag, workOrder);
+        db:WorkOrder workOrder = check payload.cloneWithType();
+        db:Asset updated = check repo.addWorkOrder(assetTag, workOrder);
 
         json response = {
             "message": "Work order added successfully",
@@ -264,12 +263,12 @@ service /api on httpListener {
     }
 
     // Update Work Order
-    isolated resource function put assets/[string assetTag]/workorders/[string workOrderId](http:Caller caller, http:Request req) returns error? {
+    resource function put assets/[string assetTag]/workorders/[string workOrderId](http:Caller caller, http:Request req) returns error? {
         log:printInfo("PUT /api/assets/" + assetTag + "/workorders/" + workOrderId + " - Updating work order");
 
         json payload = check req.getJsonPayload();
-        models:WorkOrder workOrder = check payload.cloneWithType();
-        models:Asset updated = check repo.updateWorkOrder(assetTag, workOrderId, workOrder);
+        db:WorkOrder workOrder = check payload.cloneWithType();
+        db:Asset updated = check repo.updateWorkOrder(assetTag, workOrderId, workOrder);
 
         json response = {
             "message": "Work order updated successfully",
@@ -280,10 +279,10 @@ service /api on httpListener {
     }
 
     // Complete Work Order
-    isolated resource function put assets/[string assetTag]/workorders/[string workOrderId]/complete(http:Caller caller, http:Request req) returns error? {
+    resource function put assets/[string assetTag]/workorders/[string workOrderId]/complete(http:Caller caller, http:Request req) returns error? {
         log:printInfo("PUT /api/assets/" + assetTag + "/workorders/" + workOrderId + "/complete - Completing work order");
 
-        models:Asset updated = check repo.completeWorkOrder(assetTag, workOrderId);
+        db:Asset updated = check repo.completeWorkOrder(assetTag, workOrderId);
 
         json response = {
             "message": "Work order completed successfully",
@@ -296,12 +295,12 @@ service /api on httpListener {
     //  Tasks 
 
     // Add Task
-    isolated resource function post assets/[string assetTag]/workorders/[string workOrderId]/tasks(http:Caller caller, http:Request req) returns error? {
+    resource function post assets/[string assetTag]/workorders/[string workOrderId]/tasks(http:Caller caller, http:Request req) returns error? {
         log:printInfo("POST /api/assets/" + assetTag + "/workorders/" + workOrderId + "/tasks - Adding task");
 
         json payload = check req.getJsonPayload();
-        models:Task task = check payload.cloneWithType();
-        models:Asset updated = check repo.addTask(assetTag, workOrderId, task);
+        db:Task task = check payload.cloneWithType();
+        db:Asset updated = check repo.addTask(assetTag, workOrderId, task);
 
         json response = {
             "message": "Task added successfully",
@@ -312,10 +311,10 @@ service /api on httpListener {
     }
 
     // Complete Task
-    isolated resource function put assets/[string assetTag]/workorders/[string workOrderId]/tasks/[string taskId]/complete(http:Caller caller, http:Request req) returns error? {
+    resource function put assets/[string assetTag]/workorders/[string workOrderId]/tasks/[string taskId]/complete(http:Caller caller, http:Request req) returns error? {
         log:printInfo("PUT /api/assets/" + assetTag + "/workorders/" + workOrderId + "/tasks/" + taskId + "/complete - Completing task");
 
-        models:Asset updated = check repo.completeTask(assetTag, workOrderId, taskId);
+        db:Asset updated = check repo.completeTask(assetTag, workOrderId, taskId);
 
         json response = {
             "message": "Task completed successfully",
@@ -326,11 +325,11 @@ service /api on httpListener {
     }
 
     // Remove Task 
-    isolated resource function delete assets/[string assetTag]/workorders/[string workOrderId]/tasks/[string taskId](http:Caller caller, http:Request req) returns error? {
+    resource function delete assets/[string assetTag]/workorders/[string workOrderId]/tasks/[string taskId](http:Caller caller, http:Request req) returns error? {
 
         log:printInfo("DELETE /api/assets/" + assetTag + "/workorders/" + workOrderId + "/tasks/" + taskId + " - Removing task");
 
-        models:Asset|error result = repo.removeTask(assetTag, workOrderId, taskId);
+        db:Asset|error result = repo.removeTask(assetTag, workOrderId, taskId);
 
         http:Response res = new;
         if result is error {
