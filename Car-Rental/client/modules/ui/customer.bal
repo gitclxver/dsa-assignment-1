@@ -1,13 +1,12 @@
 import ballerina/io;
 import ballerina/grpc;
+import 'client.client_stub;
 
 
-import car_rental_pb;              
+public function customerMain() returns error? {
 
-public function main() returns error? {
+     client_stub:CarRentalServiceClient ep = check new("http://localhost:9090");
 
-    carentalservice_client:CarRentalServiceClient client = check new("http://localhost:9090");
-    
     io:println("Car Rental System - Customer");
     io:println("=============================");
     
@@ -20,13 +19,13 @@ public function main() returns error? {
         string choice = io:readln().trim();
         
         if (choice == "1") {
-            check listAvailableCars(client);
+            check listAvailableCars(ep);
         } else if (choice == "2") {
-            check searchCar(client);
+            check searchCar(ep);
         } else if (choice == "3") {
-            check addToCart(client, customerId);
+            check addToCart(ep, customerId);
         } else if (choice == "4") {
-            check placeReservation(client, customerId);
+            check placeReservation(ep, customerId);
         } else if (choice == "5") {
             io:println("Thank you!");
             break;
@@ -50,30 +49,31 @@ function showCustomerMenu() {
     io:print("Choose option: ");
 }
 
-function listAvailableCars(carentalservice_client:CarRentalServiceClient client) returns error? {
+function listAvailableCars(client_stub:CarRentalServiceClient ep) returns error? {
     io:println("\n--- Available Cars ---");
     
     io:print("Filter (make/model/year, or press Enter for all): ");
     string filter = io:readln().trim();
     
     // Create request using generated types
-    car_rental_pb:ListAvailableCarsRequest request = {filter: filter};
+    client_stub:ListAvailableCarsRequest request = {filter: filter};
     
     io:println("Getting available cars...\n");
     
     // Call the generated gRPC method
-    stream<car_rental_pb:Car, grpc:Error?> carStream = check client->list_available_cars(request);
+    stream<client_stub:Car, grpc:Error?> carStream = check ep->list_available_cars(request);
     
     io:println("PLATE      MAKE         MODEL        YEAR   PRICE/DAY   MILEAGE    STATUS");
     io:println("------------------------------------------------------------------------");
     
-    check carStream.forEach(function(car_rental_pb:Car car) {
-        string status = car.status == car_rental_pb:AVAILABLE ? "AVAILABLE" : "UNAVAILABLE";
-        io:println(string `${car.plate:<10} ${car.make:<12} ${car.model:<12} ${car.year:<6} $${car.daily_price:<8.2f} ${car.mileage:<10} ${status}`);
+    check carStream.forEach(function(client_stub:Car car) {
+        string status = car.status == client_stub:AVAILABLE ? "AVAILABLE" : "UNAVAILABLE";
+        io:println(string `${car.plate} ${car.make} ${car.model} ${car.year} $${car.daily_price} ${car.mileage} ${status}`);
     });
 }
 
-function searchCar(carentalservice_client:CarRentalServiceClient client) returns error? {
+
+function searchCar(client_stub:CarRentalServiceClient ep) returns error? {
     io:println("\n--- Search Car ---");
     
     io:print("Enter car plate: ");
@@ -85,12 +85,12 @@ function searchCar(carentalservice_client:CarRentalServiceClient client) returns
     }
     
     // Create request using generated types
-    car_rental_pb:SearchCarRequest request = {plate: plate};
+    client_stub:SearchCarRequest request = {plate: plate};
     
     // Call the generated gRPC method
-    car_rental_pb:Car|grpc:Error response = client->search_car(request);
+    client_stub:Car|grpc:Error response = ep->search_car(request);
     
-    if (response is car_rental_pb:Car) {
+    if (response is client_stub:Car){
         io:println("\nCar found:");
         io:println("Plate: " + response.plate);
         io:println("Make: " + response.make);
@@ -99,86 +99,89 @@ function searchCar(carentalservice_client:CarRentalServiceClient client) returns
         io:println("Daily Price: $" + response.daily_price.toString());
         io:println("Mileage: " + response.mileage.toString());
         
-        string status = response.status == car_rental_pb:AVAILABLE ? "AVAILABLE" : "UNAVAILABLE";
+        string status = response.status == client_stub:AVAILABLE ? "AVAILABLE" : "UNAVAILABLE";
         io:println("Status: " + status);
         
-        if (response.status != car_rental_pb:AVAILABLE) {
+        if (response.status != client_stub:AVAILABLE) {
             io:println("Note: This car is currently not available for rental.");
         }
     } else {
         io:println("Car not found or error occurred.");
     }
 }
-
-function addToCart(carentalservice_client:CarRentalServiceClient client, string customerId) returns error? {
+function addToCart(client_stub:CarRentalServiceClient ep, string customerId) returns error? {
     io:println("\n--- Add to Cart ---");
     
     io:print("Car plate: ");
     string plate = io:readln().trim();
     
-    io:print("Start date (YYYY-MM-DD): ");
-    string startDate = io:readln().trim();
-    
-    io:print("End date (YYYY-MM-DD): ");
-    string endDate = io:readln().trim();
-    
-    if (plate == "" || startDate == "" || endDate == "") {
-        io:println("All fields are required!");
+    io:print("Enter number of days to rent: ");
+    string daysStr = io:readln().trim();
+    int|error daysParsed = int:fromString(daysStr);
+
+    if (daysParsed is error || daysParsed <= 0) {
+        io:println(" Invalid number of days");
         return;
     }
-    
-    // Create request using generated types (note: uses user_id not customer_id)
-    car_rental_pb:AddToCartRequest request = {
+    int days = daysParsed;
+
+    if (plate == "") {
+        io:println(" Car plate is required!");
+        return;
+    }
+
+    // Create request
+    client_stub:AddToCartRequest request = {
         user_id: customerId,
         car_plate: plate,
-        start_date: startDate,
-        end_date: endDate
+        days_to_rent: days
     };
-    
+
     // Call the generated gRPC method
-    car_rental_pb:CartResponse|grpc:Error response = client->add_to_cart(request);
+    client_stub:CartResponse|grpc:Error response = ep->add_to_cart(request);
     
-    if (response is car_rental_pb:CartResponse) {
+    if (response is client_stub:CartResponse) {
         if (response.success) {
-            io:println("✓ " + response.message);
+            io:println("Response successful: " + response.message);
         } else {
-            io:println("✗ " + response.message);
+            io:println("Response unsuccessful:" + response.message);
         }
     } else {
         io:println("Error adding to cart.");
     }
 }
 
-function placeReservation(carentalservice_client:CarRentalServiceClient client, string customerId) returns error? {
+
+function placeReservation(client_stub:CarRentalServiceClient ep, string customerId) returns error? {
     io:println("\n--- Place Reservation ---");
     io:println("Processing your cart...");
     
     // Create request using generated types
-    car_rental_pb:PlaceReservationRequest request = {user_id: customerId};
+    client_stub:PlaceReservationRequest request = {user_id: customerId};
     
     // Call the generated gRPC method
-    car_rental_pb:ReservationResponse|grpc:Error response = client->place_reservation(request);
+    client_stub:ReservationResponse|grpc:Error response = ep->place_reservation(request);
     
-    if (response is car_rental_pb:ReservationResponse) {
+    if (response is client_stub:ReservationResponse) {
         if (response.success) {
-            io:println("✓ " + response.message);
+            io:println("Response successful: "+ response.message);
             
             // Display reservation details using generated types
-            car_rental_pb:Reservation reservation = response.reservation;
+            client_stub:Reservation reservation = response.reservation;
             io:println("\n--- Reservation Details ---");
             io:println("Reservation ID: " + reservation.id);
             io:println("Customer ID: " + reservation.user_id);
             io:println("Total Price: $" + reservation.total_price.toString());
             
             io:println("\nItems:");
-            foreach car_rental_pb:CartItem item in reservation.items {
+            foreach client_stub:CartItem item in reservation.items {
                 io:println("- Car: " + item.car_plate);
-                io:println("  Dates: " + item.start_date + " to " + item.end_date);
+                io:println("  Number of days to rent: " + item.days_to_rent.toString());
                 io:println("  Price: $" + item.price.toString());
                 io:println("");
             }
         } else {
-            io:println("✗ " + response.message);
+            io:println("Response unsuccessful: " + response.message);
         }
     } else {
         io:println("Error placing reservation.");
