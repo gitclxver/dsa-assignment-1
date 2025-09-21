@@ -130,17 +130,30 @@ public class AssetRepository {
 
     // Update an Asset
     public function updateAsset(string assetTag, Asset asset) returns Asset|error {
-        if !self.assets.hasKey(assetTag) {
-            return error(ASSET_NOT_FOUND);
-        }
-        if assetTag != asset.assetTag {
-            return error(ASSET_TAG_MISMATCH);
-        }
-        
-        self.assets[assetTag] = asset.clone();
-        log:printInfo("Asset updated: " + assetTag);
-        return asset.clone();
+    Asset? maybeAsset = self.assets[assetTag];
+
+    if maybeAsset is () {
+        return error(ASSET_NOT_FOUND);
     }
+
+    if assetTag != asset.assetTag {
+        return error(ASSET_TAG_MISMATCH);
+    }
+
+    // Clone existing asset to preserve components, schedules, workOrders
+    Asset existingAsset = maybeAsset.clone();
+
+    // Update only top-level fields
+    existingAsset.name = asset.name;
+    existingAsset.faculty = asset.faculty;
+    existingAsset.department = asset.department;
+    existingAsset.status = asset.status;
+    existingAsset.acquiredDate = asset.acquiredDate;
+
+    self.assets[assetTag] = existingAsset;
+    log:printInfo("Asset updated: " + assetTag);
+    return existingAsset.clone();
+}
 
     public function deleteAsset(string assetTag) returns error? {
         if !self.assets.hasKey(assetTag) {
@@ -198,6 +211,7 @@ public class AssetRepository {
 
         Asset asset = maybeAsset.clone();
         Component[] components = asset.components ?: [];
+    
         components.push(component);
         asset.components = components;
 
@@ -258,7 +272,8 @@ public class AssetRepository {
 
         Asset asset = maybeAsset.clone();
         Schedule[] schedules = asset.schedules ?: [];
-        
+     
+
         Schedule[] newSchedules = schedules.filter(schedule => schedule.scheduleId != scheduleId);
         
         if newSchedules.length() == schedules.length() {

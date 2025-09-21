@@ -6,60 +6,100 @@ import asset_management.models;
 http:Client apiClient = check new("http://localhost:8081");
 
 public function main() returns error? {
-    io:println("Asset Management Client Demo");
-    
-    // Test all functionality with error handling
-    check createTestAssets();
-    check viewAllAssets();
-    check viewByFaculty();
-    check viewOverdueAssets();
+    io:println("   Asset Management CLI (Demo)     ");
+   
+    boolean running = true;
 
-    
-    var result = addComponentToAsset("LAP-001");
-    if (result is error) {
-        io:println("Component addition failed: " + result.message());
-    }
-    
-    result = addScheduleToAsset("LAP-001");
-    if (result is error) {
-        io:println("Schedule addition failed: " + result.message());
-    }
-    
-    result = createWorkOrder("LAP-001");
-    if (result is error) {
-        io:println("Work order creation failed: " + result.message());
-    }
-    
-    result = addTaskToWorkOrder("LAP-001", "WO-001");
-    if (result is error) {
-        io:println(" Task addition failed: " + result.message());
-    }
+    while running {
+        io:println("\nChoose an option:");
+        io:println("1. Create test assets");
+        io:println("2. View all assets");
+        io:println("3. View assets by faculty");
+        io:println("4.Create work order for LAP-001");
+        io:println("5. Add component to LAP-001");
+        io:println("6. Add schedules to LAP-001");
+        io:println("7.  View overdue assets");
+        io:println("8. Add task to work order WO-001");
+        io:println("9. Update LAP-001");
+        io:println("10. Remove component COMP-001");
+        io:println("11. Remove schedule SCHED-OVERDUE");
+        io:println("12. Delete asset SRV-001");
+        io:println("0. Exit");
 
-    // Update operation 
-    result = updateAsset("LAP-001");
-    if (result is error) {
-        io:println("Asset update failed: " + result.message());
+        string choice = io:readln("Enter your choice: ");
+
+        match choice {
+            "1" => {
+                check createTestAssets();
+            }
+            "2" => {
+                check viewAllAssets();
+            }
+            "3" => {
+                check viewByFaculty();
+            }
+            "7" => {
+                check viewOverdueAssets();
+            }
+            "5" => {
+                var result = addComponentToAsset("LAP-001");
+                if result is error {
+                    io:println("Component addition failed: " + result.message());
+                }
+            }
+            "6" => {
+                var result = addScheduleToAsset("LAP-001");
+                if result is error {
+                    io:println("Schedule addition failed: " + result.message());
+                }
+            }
+            "4" => {
+                var result = createWorkOrder("LAP-001");
+                if result is error {
+                    io:println("Work order creation failed: " + result.message());
+                }
+            }
+            "8" => {
+                var result = addTaskToWorkOrder("LAP-001", "WO-001");
+                if result is error {
+                    io:println("Task addition failed: " + result.message());
+                }
+            }
+            "9" => {
+                var result = updateAsset("LAP-001");
+                if result is error {
+                    io:println("Asset update failed: " + result.message());
+                }
+            }
+            "10" => {
+                var result = removeComponent("LAP-001", "COMP-001");
+                if result is error {
+                    io:println("Component removal failed: " + result.message());
+                }
+            }
+            "11" => {
+                var result = removeSchedule("LAP-001", "SCHED-OVERDUE");
+                if result is error {
+                    io:println("Schedule removal failed: " + result.message());
+                }
+            }
+            "12" => {
+                var result = deleteAsset("SRV-001");
+                if result is error {
+                    io:println("Asset deletion failed: " + result.message());
+                }
+            }
+            "0" => {
+                running = false;
+                io:println("Exiting CLI... Goodbye!");
+            }
+            _ => {
+                io:println("Invalid choice, please try again.");
+            }
+        }
     }
-    
-    // Remove operations 
-    result = removeComponent("LAP-001", "COMP-001");
-    if (result is error) {
-        io:println("Component removal failed: " + result.message());
-    }
-    
-    result = removeSchedule("LAP-001", "SCHED-OVERDUE");
-    if (result is error) {
-        io:println("Schedule removal failed: " + result.message());
-    }
-    
-    // Delete operation 
-    result = deleteAsset("SRV-001");
-    if (result is error) {
-        io:println("Asset deletion failed: " + result.message());
-    }
-    
-    io:println("Demo completed!");
 }
+
   
 
 function createTestAssets() returns error? {
@@ -137,20 +177,36 @@ function viewByFaculty() returns error? {
     io:println();
 }
 
-function viewOverdueAssets() returns error? {
-    io:println("4. Viewing overdue assets...");
-    http:Response response = check apiClient->get("/api/assets/overdue");
+function createWorkOrder(string assetTag) returns error? {
+    io:println("4. Creating work order for " + assetTag);
     
-    if (response.statusCode == 200) {
-        json responseBody = check response.getJsonPayload();
-        if (responseBody is json[]) {
-            io:println("Found " + responseBody.length().toString() + " overdue assets");
-        }
+    models:WorkOrder workOrder = {
+        workOrderId: "WO-001",
+        title: "Screen Repair",
+        description: "Replace screen",
+        status: "OPEN",
+        openedDate: {year: 2024, month: 9, day: 17},
+        closedDate: ()
+    };
+    
+    // Convert to JSON before sending
+    json workOrderJson = 'value:toJson(workOrder);
+    http:Response response = check apiClient->post("/api/assets/" + assetTag + "/workorders", workOrderJson);
+    
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+        io:println(" Work order created successfully");
     } else {
-        io:println("Failed to view overdue assets: Status " + response.statusCode.toString());
+        io:println(" Failed to create work order: Status " + response.statusCode.toString());
+        json|error errorBody = response.getJsonPayload();
+        if errorBody is json {
+            string errorMsg = getStringFromJson(errorBody, "message", "Unknown error");
+            io:println("Error: " + errorMsg);
+        }
+        return error("Work order creation failed");
     }
     io:println();
 }
+
 
 function addComponentToAsset(string assetTag) returns error? {
     io:println("5. Adding component to " + assetTag);
@@ -239,32 +295,22 @@ function addScheduleToAsset(string assetTag) returns error? {
     }
     io:println();
 }
-function createWorkOrder(string assetTag) returns error? {
-    io:println("7. Creating work order for " + assetTag);
+function viewOverdueAssets() returns error? {
+    io:println("7. Viewing overdue assets...");
+    http:Response response = check apiClient->get("/api/assets/overdue");
     
-    models:WorkOrder workOrder = {
-        workOrderId: "WO-001",
-        title: "Screen Repair",
-        description: "Replace screen",
-        status: "OPEN",
-        openedDate: {year: 2024, month: 9, day: 17},
-        closedDate: ()
-    };
-    
-    // Convert to JSON before sending
-    json workOrderJson = 'value:toJson(workOrder);
-    http:Response response = check apiClient->post("/api/assets/" + assetTag + "/workorders", workOrderJson);
-    
-    if (response.statusCode >= 200 && response.statusCode < 300) {
-        io:println(" Work order created successfully");
-    } else {
-        io:println(" Failed to create work order: Status " + response.statusCode.toString());
-        json|error errorBody = response.getJsonPayload();
-        if errorBody is json {
-            string errorMsg = getStringFromJson(errorBody, "message", "Unknown error");
-            io:println("Error: " + errorMsg);
+    if (response.statusCode == 200) {
+        json responseBody = check response.getJsonPayload();
+        if (responseBody is json[]) {
+            io:println("Found " + responseBody.length().toString() + " overdue assets");
+            foreach var asset in responseBody {
+                string tag = getStringFromJson(asset, "assetTag", "N/A");
+                string name = getStringFromJson(asset, "name", "N/A");
+                io:println("  - " + tag + ": " + name);
+            }
         }
-        return error("Work order creation failed");
+    } else {
+        io:println("Failed to view overdue assets: Status " + response.statusCode.toString());
     }
     io:println();
 }
