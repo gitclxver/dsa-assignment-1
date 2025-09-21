@@ -51,14 +51,13 @@ public isolated function listAvailableCars(string filter = "") returns CarDetail
     }
 
     // Add to cart
-    public isolated function addToCart(string userId, string carPlate, string startDate, string endDate)
+    public isolated function addToCart(string userId, string carPlate, int daysToRent)
         returns CartOperationResult|error {
 
         crpb:AddToCartRequest req = {
             user_id: userId,
             car_plate: carPlate,
-            start_date: startDate,
-            end_date: endDate
+           days_to_rent: daysToRent
         };
 
         crpb:CartResponse|grpc:Error result = self.grpcClient->add_to_cart(req);
@@ -83,8 +82,7 @@ public isolated function listAvailableCars(string filter = "") returns CarDetail
             foreach crpb:CartItem item in result.reservation.items {
                 items.push({
                     car_plate: item.car_plate,
-                    start_date: item.start_date,
-                    end_date: item.end_date,
+                     days_to_rent: item.days_to_rent,
                     price: item.price
                 });
             }
@@ -118,8 +116,7 @@ public type CartOperationResult record {|
 
 public type CartItemDetails record {|
     string car_plate;
-    string start_date;
-    string end_date;
+    int days_to_rent;
     float price;
 |};
 
