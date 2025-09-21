@@ -17,8 +17,19 @@ public isolated function listAvailableCars(string filter = "") returns CarDetail
     stream<crpb:Car, grpc:Error?> carStream = check self.grpcClient->list_available_cars(req);
 
     
-    CarDetails[] cars = check from var car in carStream
-        select {
+    CarDetails[] cars = [];
+    
+        while true {
+    var next = carStream.next();
+    if next is grpc:Error {
+        return error("Error while streaming cars: " + next.message());
+    } else if next is () {
+        // Stream ended
+        break;
+    } else {
+        // Unwrap the value from the record
+        crpb:Car car = next.value;  // <-- use .value, no casting needed
+        cars.push({
             plate: car.plate,
             make: car.make,
             model: car.model,
@@ -26,7 +37,9 @@ public isolated function listAvailableCars(string filter = "") returns CarDetail
             daily_price: car.daily_price,
             mileage: car.mileage,
             status: car.status.toString()
-        };
+        });
+    }
+}
 
     return cars;
 }

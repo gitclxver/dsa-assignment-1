@@ -15,7 +15,7 @@ public function adminMain() returns error? {
         io:println("3. Update Car");
         io:println("4. Remove Car");
         io:println("5. List All Cars");
-        io:println("6. Exit");
+        io:println("6. LogOut");
         
         string choice = io:readln("Select option: ").trim();
         
@@ -27,7 +27,7 @@ public function adminMain() returns error? {
             "5" => { check listCarsUI(adminHandler); }
             "6" => { 
                 io:println("Exiting admin panel...");
-                break;
+                return;
             }
             _ => { io:println("Invalid option. Please try again."); }
         }

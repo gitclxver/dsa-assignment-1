@@ -13,7 +13,7 @@ public function customerMain() returns error? {
         io:println("2. Search Car by License Plate");
         io:println("3. Add Car to Cart");
         io:println("4. Place Reservation");
-        io:println("5. Exit");
+        io:println("5. LogOut");
         
         string choice = io:readln("Select option: ").trim();
         
@@ -23,8 +23,8 @@ public function customerMain() returns error? {
             "3" => { check addToCartUI(customerHandler); }
             "4" => { check placeReservationUI(customerHandler); }
             "5" => { 
-                io:println("Thank you for using Car Rental System!");
-                break;
+                io:println("Exiting Customer panel");
+                return ;
             }
             _ => { io:println("Invalid option. Please try again."); }
         }

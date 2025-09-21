@@ -110,17 +110,29 @@ public isolated client class AdminHandler {
         crpb:ListAvailableCarsRequest req = { filter: filter };
         stream<crpb:Car, grpc:Error?> carStream = check self.grpcClient->list_available_cars(req);
         
-        CarInfo[] cars = check from var car in carStream
-            select {
-                plate: car.plate,
-                make: car.make,
-                model: car.model,
-                year: car.year,
-                daily_price: car.daily_price,
-                mileage: car.mileage,
-                status: car.status.toString()
-            };
-            
+        CarInfo[] cars = [];
+        while true {
+    var next = carStream.next();
+    if next is grpc:Error {
+        return error("Error while streaming cars: " + next.message());
+    } else if next is () {
+        // Stream ended
+        break;
+    } else {
+        // Unwrap the value from the record
+        crpb:Car car = next.value;  
+        cars.push({
+            plate: car.plate,
+            make: car.make,
+            model: car.model,
+            year: car.year,
+            daily_price: car.daily_price,
+            mileage: car.mileage,
+            status: car.status.toString()
+        });
+    }
+}
+           
         return cars;
     }
 }
