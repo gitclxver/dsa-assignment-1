@@ -1,7 +1,7 @@
 import ballerina/time;
 import ballerina/log;
 
-
+// Records Basically How Our data is Stored within the Local Database
 public type Asset record {
     string assetTag;
     string name;
@@ -77,6 +77,8 @@ public type WorkOrderRequest record {
     string status;
 };
 
+
+
 public const ASSET_NOT_FOUND = "AssetNotFound";
 public const ASSET_ALREADY_EXISTS = "AssetAlreadyExists";
 public const COMPONENT_NOT_FOUND = "ComponentNotFound";
@@ -96,69 +98,89 @@ public class AssetRepository {
     }
 
     // Create an Asset
+    //Takes in Asset Object 
 
     public function createAsset(Asset asset) returns Asset|error{
 
+        // Check if the assetTag exists
         if self.assets.hasKey(asset.assetTag) {
+            // Throw Error
             return error(ASSET_ALREADY_EXISTS);
         }
         
+        // If Not Exist this will add the asset object to the self.assets map by cloning it using the .clone() method
         self.assets[asset.assetTag] = asset.clone();
         log:printInfo("Asset created: " + asset.assetTag);
+        // Returns a copy of the asset object
         return asset.clone();
     }
 
 
     // Get All Assets
+    // Returns an Array of Asset objects
     public function getAllAssets() returns Asset[] {
         Asset[] result = [];
+        // Foreach loop to iterate over all entries of the self.assets map
         foreach var [_, asset] in self.assets.entries() {
+            // For each entry it clones the asset Object and adds it to the result array
             result.push(asset.clone());
         }
+        // Returns the result array
         return result;
     }
 
     // Get One Asset
     public function getAsset(string assetTag) returns Asset|error {
+        //Try to retrieve an asset from the map using the assetTag 
         Asset? maybeAsset = self.assets[assetTag];
+
+        //If not found then an error is printed 
         if maybeAsset is (){
             return error(ASSET_NOT_FOUND);
         }
+        
+        //If the asset is found the asset object is cloned and that is returned
 
         return maybeAsset.clone();
     }
 
     // Update an Asset
     public function updateAsset(string assetTag, Asset asset) returns Asset|error {
-    Asset? maybeAsset = self.assets[assetTag];
+        //
+        Asset? maybeAsset = self.assets[assetTag];
 
-    if maybeAsset is () {
-        return error(ASSET_NOT_FOUND);
+        //Check if exists    
+        if maybeAsset is () {
+            return error(ASSET_NOT_FOUND);
+        }
+
+        //Check if assetTags Match
+        if assetTag != asset.assetTag {
+            return error(ASSET_TAG_MISMATCH);
+        }
+
+        // Clone existing asset to preserve components, schedules, workOrders
+        Asset existingAsset = maybeAsset.clone();
+
+        // Update only top-level fields
+        existingAsset.name = asset.name;
+        existingAsset.faculty = asset.faculty;
+        existingAsset.department = asset.department;
+        existingAsset.status = asset.status;
+        existingAsset.acquiredDate = asset.acquiredDate;
+
+        // Update the self.assets with the updated existingAsset object
+        self.assets[assetTag] = existingAsset;
+        log:printInfo("Asset updated: " + assetTag);
+        return existingAsset.clone();
     }
-
-    if assetTag != asset.assetTag {
-        return error(ASSET_TAG_MISMATCH);
-    }
-
-    // Clone existing asset to preserve components, schedules, workOrders
-    Asset existingAsset = maybeAsset.clone();
-
-    // Update only top-level fields
-    existingAsset.name = asset.name;
-    existingAsset.faculty = asset.faculty;
-    existingAsset.department = asset.department;
-    existingAsset.status = asset.status;
-    existingAsset.acquiredDate = asset.acquiredDate;
-
-    self.assets[assetTag] = existingAsset;
-    log:printInfo("Asset updated: " + assetTag);
-    return existingAsset.clone();
-}
 
     public function deleteAsset(string assetTag) returns error? {
+        // Check if asset exists
         if !self.assets.hasKey(assetTag) {
             return error(ASSET_NOT_FOUND);
         }
+        // Remove asset from self.assets map using the remove method '_' used to discard the return value 
         _ = self.assets.remove(assetTag);
         log:printInfo("Asset deleted: " + assetTag);
         return;
@@ -166,9 +188,12 @@ public class AssetRepository {
 
     // Get an Asset By Specific Faculty
     public function getAssetsByFaculty(string faculty) returns Asset[] {
+        // Empty results array to store entries
         Asset[] result = [];
         foreach var [_, asset] in self.assets.entries() {
+            //Checks if the faculty property of the asset object matches the provided parameter
             if asset.faculty == faculty {
+                //if there is a match then a clone is added to the result array
                 result.push(asset.clone());
             }
         }
@@ -178,28 +203,28 @@ public class AssetRepository {
     // Get Assets with Overdue Schedules
     public function getAssetsWithOverdueSchedules() returns Asset[] {
         
-    string currentUtcString = time:utcNow().toString();
-    string currentDateStr = currentUtcString.substring(0, 10);
+        string currentUtcString = time:utcNow().toString();
+        string currentDateStr = currentUtcString.substring(0, 10);
 
-    Asset[] result = [];
+        Asset[] result = [];
 
-    foreach var [_, asset] in self.assets.entries() {
-        Schedule[] schedules = asset.schedules ?: [];
-        boolean hasOverdue = false;
-
-        foreach Schedule s in schedules {
-            if s.status == SCHEDULE_ACTIVE && s.nextDueDate < currentDateStr {
-                hasOverdue = true;
-                break;
+        foreach var [_, asset] in self.assets.entries() {
+            Schedule[] schedules = asset.schedules ?: [];
+            boolean hasOverdue = false;
+            //Time comparison 
+            foreach Schedule s in schedules {
+                if s.status == SCHEDULE_ACTIVE && s.nextDueDate < currentDateStr {
+                    hasOverdue = true;
+                    break;
+                }
+            }
+            // If hasOverDue is true then the asset is cloned and pushed to the results array
+            if hasOverdue {
+                result.push(asset.clone());
             }
         }
-
-        if hasOverdue {
-            result.push(asset.clone());
-        }
+        return result;
     }
-    return result;
-}
 
     // Add a Component
     public function addComponent(string assetTag, Component component) returns Asset|error {
